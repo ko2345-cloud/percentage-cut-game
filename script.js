@@ -549,7 +549,7 @@ function gameLoop() {
 
     // 繪製圖形
     if (currentShape && gameState === 'playing') {
-        currentShape.draw('#4ECDC4');
+        currentShape.draw('#FF9F43'); // v1.2.1: 改為橙色以確認更新
     }
 
     // 更新並繪製掉落的碎片
@@ -626,6 +626,7 @@ function gameLoop() {
 // 啟動遊戲
 // ============================================================================
 document.getElementById('startButton').addEventListener('click', async () => {
+    console.log("Game Version: v1.2.1 (Orange Shape Verification)");
     try {
         document.getElementById('startScreen').classList.add('hidden');
 
