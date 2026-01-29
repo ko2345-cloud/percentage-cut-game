@@ -129,20 +129,20 @@ class Polygon {
         const poly2 = [];
 
         // 構建第一個多邊形
-        let idx = int1.index + 1;
+        let idx = (int1.index + 1) % n;
         poly1.push(int1.point);
-        while (idx !== int2.index + 1) {
-            poly1.push(this.vertices[idx % n]);
-            idx++;
+        while (idx !== (int2.index + 1) % n) {
+            poly1.push(this.vertices[idx]);
+            idx = (idx + 1) % n;
         }
         poly1.push(int2.point);
 
         // 構建第二個多邊形
-        idx = int2.index + 1;
+        idx = (int2.index + 1) % n;
         poly2.push(int2.point);
-        while (idx !== int1.index + 1) {
-            poly2.push(this.vertices[idx % n]);
-            idx++;
+        while (idx !== (int1.index + 1) % n) {
+            poly2.push(this.vertices[idx]);
+            idx = (idx + 1) % n;
         }
         poly2.push(int1.point);
 
