@@ -130,7 +130,7 @@ class Polygon {
 
         // 構建第一個多邊形
         let idx = (int1.index + 1) % n;
-        poly1.push(int1.point);
+        poly1.push({ x: int1.point.x, y: int1.point.y }); // 深拷貝交點
 
         let safetyCounter = 0;
         while (idx !== (int2.index + 1) % n) {
@@ -144,11 +144,11 @@ class Polygon {
                 return null;
             }
         }
-        poly1.push(int2.point);
+        poly1.push({ x: int2.point.x, y: int2.point.y }); // 深拷貝交點
 
         // 構建第二個多邊形
         idx = (int2.index + 1) % n;
-        poly2.push(int2.point);
+        poly2.push({ x: int2.point.x, y: int2.point.y }); // 深拷貝交點
 
         safetyCounter = 0;
         while (idx !== (int1.index + 1) % n) {
@@ -162,7 +162,7 @@ class Polygon {
                 return null;
             }
         }
-        poly2.push(int1.point);
+        poly2.push({ x: int1.point.x, y: int1.point.y }); // 深拷貝交點
 
         return [new Polygon(poly1), new Polygon(poly2)];
     }
@@ -628,7 +628,7 @@ function gameLoop() {
 // 啟動遊戲
 // ============================================================================
 document.getElementById('startButton').addEventListener('click', async () => {
-    console.log("Game Version: v1.2.1 (Orange Shape Verification)");
+    console.log("Game Version: v1.3 (Fixed Stretching & Colors)");
     try {
         document.getElementById('startScreen').classList.add('hidden');
 
