@@ -158,33 +158,83 @@ function setupMediaPipe() {
 // MediaPipe 結果回調
 let previousIndexTip = null;
 let gestureTrail = [];
+let handPositions = []; // 儲存所有手的位置
 
 function onHandsResults(results) {
-    // 繪製手部追蹤點
+    // 清空之前的手部位置
+    handPositions = [];
+
+    // 繪製所有檢測到的手部追蹤點
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        const hand = results.multiHandLandmarks[0];
-        const indexTip = hand[8]; // 食指尖端
+        // 顯示調試信息：檢測到的手部數量
+        const debugText = `檢測到 ${results.multiHandLandmarks.length} 隻手`;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 20px Arial';
+        ctx.fillText(debugText, 20, canvas.height - 20);
 
-        // 轉換到畫布坐標
-        const x = (1 - indexTip.x) * canvas.width; // 鏡像翻轉
-        const y = indexTip.y * canvas.height;
+        // 處理每一隻手
+        results.multiHandLandmarks.forEach((hand, index) => {
+            const indexTip = hand[8]; // 食指尖端
 
-        // 繪製食指追蹤點
-        ctx.fillStyle = '#FF6B6B';
-        ctx.beginPath();
-        ctx.arc(x, y, 15, 0, Math.PI * 2);
-        ctx.fill();
+            // 轉換到畫布坐標
+            const x = (1 - indexTip.x) * canvas.width; // 鏡像翻轉
+            const y = indexTip.y * canvas.height;
 
-        // 記錄軌跡
-        gestureTrail.push({ x, y, time: Date.now() });
+            // 儲存手部位置
+            handPositions.push({ x, y, handIndex: index });
 
-        // 只保留最近 30 幀的軌跡
-        if (gestureTrail.length > 30) {
-            gestureTrail.shift();
-        }
+            // 為不同的手使用不同顏色
+            const colors = ['#FF6B6B', '#4ECDC4']; // 紅色、青色
+            const color = colors[index % colors.length];
+
+            // 繪製光點外圈（發光效果）
+            const gradient = ctx.createRadialGradient(x, y, 0, x, y, 30);
+            gradient.addColorStop(0, color);
+            gradient.addColorStop(0.5, color + '80'); // 半透明
+            gradient.addColorStop(1, color + '00'); // 完全透明
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(x, y, 30, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 繪製光點核心
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, 15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 繪製光點白色中心點
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(x, y, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 在光點旁邊顯示標籤
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText(`手 ${index + 1}`, x + 25, y + 5);
+
+            // 記錄第一隻手的軌跡用於切割
+            if (index === 0) {
+                gestureTrail.push({ x, y, time: Date.now() });
+
+                // 只保留最近 30 幀的軌跡
+                if (gestureTrail.length > 30) {
+                    gestureTrail.shift();
+                }
+            }
+        });
 
         // 檢測滑動手勢
         detectSwipe();
+    } else {
+        // 沒有檢測到手部時顯示提示
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('請將雙手放在鏡頭前', canvas.width / 2, canvas.height - 30);
+        ctx.textAlign = 'left'; // 恢復默認對齊
     }
 }
 
