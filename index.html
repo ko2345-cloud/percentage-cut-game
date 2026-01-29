@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#667eea">
+    <title>切割遊戲 - Percentage Cut</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="game-container">
+        <!-- 攝像頭視頻 (隱藏) -->
+        <video id="webcam" autoplay playsinline></video>
+
+        <!-- 遊戲畫布 -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- UI 覆蓋層 -->
+        <div class="ui-overlay">
+            <div class="stat-box">
+                <div class="stat-label">目標</div>
+                <div class="stat-value" id="targetPercent">10%</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">目前面積</div>
+                <div class="stat-value" id="currentPercent">100%</div>
+            </div>
+        </div>
+
+        <!-- 遊戲狀態訊息 -->
+        <div id="gameMessage" class="game-message hidden"></div>
+
+        <!-- 開始按鈕 -->
+        <div id="startScreen" class="start-screen">
+            <h1>切割遊戲</h1>
+            <p>用雙手切割圖案，將面積減少到目標百分比！</p>
+            <button id="startButton">開始遊戲</button>
+        </div>
+    </div>
+
+    <!-- MediaPipe Hands -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
+
+    <!-- 遊戲腳本 -->
+    <script src="script.js"></script>
+</body>
+
+</html>
