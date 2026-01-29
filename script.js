@@ -56,11 +56,11 @@ class Polygon {
     }
 
     // 繪製多邊形
-    draw(color = '#4ECDC4', lineWidth = 4) {
+    draw(color = '#4ECDC4', lineWidth = 4, strokeColor = '#000000') {
         if (this.vertices.length < 3) return;
 
         ctx.fillStyle = color;
-        ctx.strokeStyle = '#FFFFFF';
+        ctx.strokeStyle = strokeColor;
         ctx.lineWidth = lineWidth;
         ctx.lineJoin = 'round';
 
@@ -134,7 +134,8 @@ class Polygon {
 
         let safetyCounter = 0;
         while (idx !== (int2.index + 1) % n) {
-            poly1.push(this.vertices[idx]);
+            // 深拷貝頂點防止引用共享
+            poly1.push({ x: this.vertices[idx].x, y: this.vertices[idx].y });
             idx = (idx + 1) % n;
 
             safetyCounter++;
@@ -151,7 +152,8 @@ class Polygon {
 
         safetyCounter = 0;
         while (idx !== (int1.index + 1) % n) {
-            poly2.push(this.vertices[idx]);
+            // 深拷貝頂點防止引用共享
+            poly2.push({ x: this.vertices[idx].x, y: this.vertices[idx].y });
             idx = (idx + 1) % n;
 
             safetyCounter++;
@@ -194,7 +196,7 @@ class FallingPiece {
     draw() {
         ctx.save();
         ctx.globalAlpha = this.opacity;
-        this.polygon.draw('#FFD700'); // 黃色表示被切掉的部分
+        this.polygon.draw('#FFD700', 4, '#000000'); // 黃色碎片，黑色邊框
         ctx.restore();
     }
 
@@ -549,7 +551,7 @@ function gameLoop() {
 
     // 繪製圖形
     if (currentShape && gameState === 'playing') {
-        currentShape.draw('#FF9F43'); // v1.2.1: 改為橙色以確認更新
+        currentShape.draw('#FFFFFF', 4, '#000000'); // 改為白色，黑色邊框
     }
 
     // 更新並繪製掉落的碎片
