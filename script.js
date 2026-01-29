@@ -131,18 +131,34 @@ class Polygon {
         // 構建第一個多邊形
         let idx = (int1.index + 1) % n;
         poly1.push(int1.point);
+
+        let safetyCounter = 0;
         while (idx !== (int2.index + 1) % n) {
             poly1.push(this.vertices[idx]);
             idx = (idx + 1) % n;
+
+            safetyCounter++;
+            if (safetyCounter > n + 10) {
+                console.error("無限循環檢測: Polygon 1 構建失敗");
+                return null;
+            }
         }
         poly1.push(int2.point);
 
         // 構建第二個多邊形
         idx = (int2.index + 1) % n;
         poly2.push(int2.point);
+
+        safetyCounter = 0;
         while (idx !== (int1.index + 1) % n) {
             poly2.push(this.vertices[idx]);
             idx = (idx + 1) % n;
+
+            safetyCounter++;
+            if (safetyCounter > n + 10) {
+                console.error("無限循環檢測: Polygon 2 構建失敗");
+                return null;
+            }
         }
         poly2.push(int1.point);
 
@@ -251,9 +267,11 @@ function onHandsResults(results) {
         ctx.font = 'bold 20px Arial';
         ctx.fillText(debugText, 20, canvas.height - 20);
 
-        // 處理每一隻手
-        results.multiHandLandmarks.forEach((hand, index) => {
-            const indexTip = hand[8]; // 食指尖端
+        // 處理每一隻手 (只處理第一隻檢測到的手，忽略其他)
+        const primaryHand = results.multiHandLandmarks[0];
+        if (primaryHand) {
+            const index = 0; // 強制使用 index 0
+            const indexTip = primaryHand[8]; // 食指尖端
 
             // 轉換到畫布坐標
             const x = (1 - indexTip.x) * canvas.width; // 鏡像翻轉
@@ -262,9 +280,8 @@ function onHandsResults(results) {
             // 儲存手部位置
             handPositions.push({ x, y, handIndex: index });
 
-            // 為不同的手使用不同顏色
-            const colors = ['#FF6B6B', '#4ECDC4']; // 紅色、青色
-            const color = colors[index % colors.length];
+            // 繪製光點
+            const color = '#FF6B6B'; // 始終使用紅色
 
             // 繪製光點外圈（發光效果）
             const gradient = ctx.createRadialGradient(x, y, 0, x, y, 30);
@@ -292,24 +309,21 @@ function onHandsResults(results) {
             // 在光點旁邊顯示標籤
             ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold 16px Arial';
-            ctx.fillText(`手 ${index + 1}`, x + 25, y + 5);
+            ctx.fillText(`手 1`, x + 25, y + 5);
 
-            // 記錄第一隻手的軌跡用於切割
-            if (index === 0) {
-                // 檢查邊緣穿越（新的切割方式）
-                if (gameState === 'playing') {
-                    checkEdgeCrossing({ x, y });
-                }
-
-                // 記錄軌跡（舊的滑動手勢）
-                gestureTrail.push({ x, y, time: Date.now() });
-
-                // 只保留最近 30 幀的軌跡
-                if (gestureTrail.length > 30) {
-                    gestureTrail.shift();
-                }
+            // 檢查邊緣穿越
+            if (gameState === 'playing') {
+                checkEdgeCrossing({ x, y });
             }
-        });
+
+            // 記錄軌跡（舊的滑動手勢）
+            gestureTrail.push({ x, y, time: Date.now() });
+
+            // 只保留最近 30 幀的軌跡
+            if (gestureTrail.length > 30) {
+                gestureTrail.shift();
+            }
+        }
 
         // 檢測滑動手勢
         detectSwipe();
