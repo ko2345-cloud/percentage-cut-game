@@ -224,7 +224,8 @@ function setupMediaPipe() {
     });
 
     hands.setOptions({
-        maxNumHands: 2,
+        maxNumHands: 1,  // 只偵測一隻手
+
         modelComplexity: 1,
         minDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5
@@ -317,7 +318,7 @@ function onHandsResults(results) {
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 24px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('請將雙手放在鏡頭前', canvas.width / 2, canvas.height - 30);
+        ctx.fillText('請將一隻手放在鏡頭前', canvas.width / 2, canvas.height - 30);
         ctx.textAlign = 'left'; // 恢復默認對齊
     }
 }
@@ -374,20 +375,39 @@ function checkEdgeCrossing(point) {
 
     if (!wasInside && isInside) {
         // 進入圖形 - 找到進入點
-        const entryPoint = cuttingState.lastPosition ?
-            currentShape.findEdgeIntersection(cuttingState.lastPosition, point) : null;
+        let entryPoint = null;
 
-        if (entryPoint) {
-            cuttingState.entryPoint = entryPoint;
-            cuttingState.isInside = true;
-            cuttingState.currentPath = [entryPoint, point];
+        if (cuttingState.lastPosition) {
+            entryPoint = currentShape.findEdgeIntersection(cuttingState.lastPosition, point);
         }
+
+        // 如果找不到精確交點，使用當前點
+        if (!entryPoint) {
+            entryPoint = { x: point.x, y: point.y };
+        }
+
+        cuttingState.entryPoint = entryPoint;
+        cuttingState.isInside = true;
+        cuttingState.currentPath = [entryPoint];
+
+        console.log('✅ 進入圖形！', entryPoint);
+
     } else if (wasInside && !isInside) {
         // 離開圖形 - 找到離開點並執行切割
-        if (cuttingState.entryPoint && cuttingState.lastPosition) {
-            const exitPoint = currentShape.findEdgeIntersection(cuttingState.lastPosition, point);
+        if (cuttingState.entryPoint) {
+            let exitPoint = null;
+
+            if (cuttingState.lastPosition) {
+                exitPoint = currentShape.findEdgeIntersection(cuttingState.lastPosition, point);
+            }
+
+            // 如果找不到精確交點，使用最後一個內部點
+            if (!exitPoint && cuttingState.currentPath.length > 0) {
+                exitPoint = cuttingState.currentPath[cuttingState.currentPath.length - 1];
+            }
 
             if (exitPoint) {
+                console.log('✂️ 離開圖形！', exitPoint);
                 performEdgeBasedCut(cuttingState.entryPoint, exitPoint);
             }
         }
@@ -396,29 +416,37 @@ function checkEdgeCrossing(point) {
         cuttingState.isInside = false;
         cuttingState.entryPoint = null;
         cuttingState.currentPath = [];
+
     } else if (isInside && cuttingState.entryPoint) {
         // 還在圖形內，追蹤路徑
-        cuttingState.currentPath.push(point);
+        cuttingState.currentPath.push({ x: point.x, y: point.y });
 
         // 限制路徑長度
-        if (cuttingState.currentPath.length > 50) {
+        if (cuttingState.currentPath.length > 100) {
             cuttingState.currentPath.shift();
         }
     }
 
-    cuttingState.lastPosition = point;
+    cuttingState.lastPosition = { x: point.x, y: point.y };
 }
 
 // 執行基於邊緣的切割
 function performEdgeBasedCut(entryPoint, exitPoint) {
     if (!currentShape || gameState !== 'playing') return;
 
+    console.log('🔪 開始切割...', { entry: entryPoint, exit: exitPoint });
+
     const result = currentShape.slice(entryPoint, exitPoint);
-    if (!result) return;
+    if (!result) {
+        console.log('❌ 切割失敗 - 無法找到兩個交點');
+        return;
+    }
 
     const [poly1, poly2] = result;
     const area1 = poly1.getArea();
     const area2 = poly2.getArea();
+
+    console.log('✅ 切割成功！面積:', { area1: Math.round(area1), area2: Math.round(area2) });
 
     // 確定哪個是較大的部分
     let keepPoly, discardPoly;
