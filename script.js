@@ -14,6 +14,17 @@ let swipeStart = null;
 let swipeEnd = null;
 let tracking = false;
 
+// 切割狀態追蹤
+let cuttingState = {
+    isInside: false,
+    entryPoint: null,
+    currentPath: [],
+    lastPosition: null
+};
+
+// 掉落的圖形碎片
+let fallingPieces = [];
+
 // ============================================================================
 // 初始化畫布尺寸
 // ============================================================================
@@ -63,6 +74,36 @@ class Polygon {
         ctx.stroke();
     }
 
+    // 檢查點是否在多邊形內（射線投射算法）
+    isPointInside(point) {
+        let inside = false;
+        for (let i = 0, j = this.vertices.length - 1; i < this.vertices.length; j = i++) {
+            const xi = this.vertices[i].x, yi = this.vertices[i].y;
+            const xj = this.vertices[j].x, yj = this.vertices[j].y;
+
+            const intersect = ((yi > point.y) !== (yj > point.y))
+                && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    // 找到從外部點到內部點穿過邊緣的交點
+    findEdgeIntersection(outsidePoint, insidePoint) {
+        const n = this.vertices.length;
+        for (let i = 0; i < n; i++) {
+            const j = (i + 1) % n;
+            const intersection = getLineIntersection(
+                outsidePoint, insidePoint,
+                this.vertices[i], this.vertices[j]
+            );
+            if (intersection) {
+                return intersection;
+            }
+        }
+        return null;
+    }
+
     // 用線段切割多邊形
     slice(lineStart, lineEnd) {
         const intersections = [];
@@ -106,6 +147,43 @@ class Polygon {
         poly2.push(int1.point);
 
         return [new Polygon(poly1), new Polygon(poly2)];
+    }
+}
+
+// ============================================================================
+// 數學工具函數
+// ============================================================================
+
+// ============================================================================
+// 掉落碎片類別
+// ============================================================================
+class FallingPiece {
+    constructor(polygon) {
+        this.polygon = polygon;
+        this.velocity = 0;
+        this.gravity = 0.5;
+        this.opacity = 1;
+        this.rotation = (Math.random() - 0.5) * 0.05; // 輕微旋轉
+    }
+
+    update() {
+        this.velocity += this.gravity;
+        // 移動所有頂點向下
+        this.polygon.vertices.forEach(v => {
+            v.y += this.velocity;
+        });
+        this.opacity -= 0.015;
+    }
+
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.opacity;
+        this.polygon.draw('#FFD700'); // 黃色表示被切掉的部分
+        ctx.restore();
+    }
+
+    isOffScreen() {
+        return this.polygon.vertices.every(v => v.y > canvas.height + 100) || this.opacity <= 0;
     }
 }
 
@@ -217,6 +295,12 @@ function onHandsResults(results) {
 
             // 記錄第一隻手的軌跡用於切割
             if (index === 0) {
+                // 檢查邊緣穿越（新的切割方式）
+                if (gameState === 'playing') {
+                    checkEdgeCrossing({ x, y });
+                }
+
+                // 記錄軌跡（舊的滑動手勢）
                 gestureTrail.push({ x, y, time: Date.now() });
 
                 // 只保留最近 30 幀的軌跡
@@ -281,7 +365,93 @@ function initGame() {
     updateUI();
 }
 
-// 執行切割
+// 檢查邊緣穿越並執行切割
+function checkEdgeCrossing(point) {
+    if (!currentShape || gameState !== 'playing') return;
+
+    const wasInside = cuttingState.isInside;
+    const isInside = currentShape.isPointInside(point);
+
+    if (!wasInside && isInside) {
+        // 進入圖形 - 找到進入點
+        const entryPoint = cuttingState.lastPosition ?
+            currentShape.findEdgeIntersection(cuttingState.lastPosition, point) : null;
+
+        if (entryPoint) {
+            cuttingState.entryPoint = entryPoint;
+            cuttingState.isInside = true;
+            cuttingState.currentPath = [entryPoint, point];
+        }
+    } else if (wasInside && !isInside) {
+        // 離開圖形 - 找到離開點並執行切割
+        if (cuttingState.entryPoint && cuttingState.lastPosition) {
+            const exitPoint = currentShape.findEdgeIntersection(cuttingState.lastPosition, point);
+
+            if (exitPoint) {
+                performEdgeBasedCut(cuttingState.entryPoint, exitPoint);
+            }
+        }
+
+        // 重置狀態
+        cuttingState.isInside = false;
+        cuttingState.entryPoint = null;
+        cuttingState.currentPath = [];
+    } else if (isInside && cuttingState.entryPoint) {
+        // 還在圖形內，追蹤路徑
+        cuttingState.currentPath.push(point);
+
+        // 限制路徑長度
+        if (cuttingState.currentPath.length > 50) {
+            cuttingState.currentPath.shift();
+        }
+    }
+
+    cuttingState.lastPosition = point;
+}
+
+// 執行基於邊緣的切割
+function performEdgeBasedCut(entryPoint, exitPoint) {
+    if (!currentShape || gameState !== 'playing') return;
+
+    const result = currentShape.slice(entryPoint, exitPoint);
+    if (!result) return;
+
+    const [poly1, poly2] = result;
+    const area1 = poly1.getArea();
+    const area2 = poly2.getArea();
+
+    // 確定哪個是較大的部分
+    let keepPoly, discardPoly;
+    if (area1 > area2) {
+        keepPoly = poly1;
+        discardPoly = poly2;
+    } else {
+        keepPoly = poly2;
+        discardPoly = poly1;
+    }
+
+    // 更新當前圖形為較大的部分
+    currentShape = keepPoly;
+
+    // 添加較小的部分到掉落動畫
+    fallingPieces.push(new FallingPiece(discardPoly));
+
+    updateUI();
+    checkWinCondition();
+}
+
+// 檢查勝利條件
+function checkWinCondition() {
+    if (!currentShape || !window.initialArea) return;
+
+    const currentPercent = (currentShape.getArea() / window.initialArea) * 100;
+    if (currentPercent <= targetPercent) {
+        gameState = 'won';
+        showMessage('🎉 你贏了！');
+    }
+}
+
+// 執行切割（保留舊的滑動手勢功能）
 const initialArea = 0;
 function performSlice(start, end) {
     if (!currentShape || gameState !== 'playing') return;
@@ -303,13 +473,7 @@ function performSlice(start, end) {
     }
 
     updateUI();
-
-    // 檢查勝利條件
-    const currentPercent = (currentShape.getArea() / window.initialArea) * 100;
-    if (currentPercent <= targetPercent) {
-        gameState = 'won';
-        showMessage('🎉 你贏了！');
-    }
+    checkWinCondition();
 }
 
 // 更新 UI
@@ -346,7 +510,62 @@ function gameLoop() {
         currentShape.draw('#4ECDC4');
     }
 
-    // 繪製手勢軌跡
+    // 更新並繪製掉落的碎片
+    fallingPieces = fallingPieces.filter(piece => {
+        piece.update();
+        piece.draw();
+        return !piece.isOffScreen();
+    });
+
+    // 繪製進入點指示器
+    if (cuttingState.entryPoint && cuttingState.isInside) {
+        // 外圈（發光效果）
+        const gradient = ctx.createRadialGradient(
+            cuttingState.entryPoint.x, cuttingState.entryPoint.y, 0,
+            cuttingState.entryPoint.x, cuttingState.entryPoint.y, 20
+        );
+        gradient.addColorStop(0, '#FFD700');
+        gradient.addColorStop(0.5, '#FFD70080');
+        gradient.addColorStop(1, '#FFD70000');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(cuttingState.entryPoint.x, cuttingState.entryPoint.y, 20, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 核心點
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(cuttingState.entryPoint.x, cuttingState.entryPoint.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 白色中心
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(cuttingState.entryPoint.x, cuttingState.entryPoint.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 標籤 A
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 16px Arial';
+        ctx.fillText('A', cuttingState.entryPoint.x + 15, cuttingState.entryPoint.y - 15);
+    }
+
+    // 繪製切割路徑預覽
+    if (cuttingState.isInside && cuttingState.currentPath.length > 1) {
+        ctx.strokeStyle = 'rgba(255, 215, 0, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 5]);
+        ctx.beginPath();
+        ctx.moveTo(cuttingState.currentPath[0].x, cuttingState.currentPath[0].y);
+        for (let i = 1; i < cuttingState.currentPath.length; i++) {
+            ctx.lineTo(cuttingState.currentPath[i].x, cuttingState.currentPath[i].y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // 繪製手勢軌跡（舊功能，保留）
     if (gestureTrail.length > 1) {
         ctx.strokeStyle = 'rgba(255, 107, 107, 0.5)';
         ctx.lineWidth = 3;
