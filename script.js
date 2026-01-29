@@ -372,14 +372,14 @@ document.getElementById('startButton').addEventListener('click', async () => {
         setupMediaPipe();
 
         // 啟動攝像頭（移動設備優化）
-        // 優先使用後置攝像頭
+        // 使用前置攝像頭，讓玩家可以看到自己
         camera = new Camera(video, {
             onFrame: async () => {
                 await hands.send({ image: video });
             },
             width: 1280,
             height: 720,
-            facingMode: 'environment' // 優先使用後置攝像頭
+            facingMode: 'user' // 使用前置攝像頭
         });
 
         await camera.start();
