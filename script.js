@@ -377,6 +377,10 @@ function initGame() {
         { x: cx - size / 2, y: cy + size / 2 }
     ]);
 
+    // 初始化原始面積
+    window.initialArea = currentShape.getArea();
+    console.log('🎮 遊戲初始化！原始面積:', window.initialArea);
+
     targetPercent = 10;
     gameState = 'playing';
     updateUI();
@@ -480,7 +484,11 @@ function performEdgeBasedCut(entryPoint, exitPoint) {
     // 添加較小的部分到掉落動畫
     fallingPieces.push(new FallingPiece(discardPoly));
 
+    // 立即更新UI顯示百分比
     updateUI();
+
+    console.log('📊 切割後面積:', Math.round(currentShape.getArea()), '原始面積:', Math.round(window.initialArea), '百分比:', ((currentShape.getArea() / window.initialArea) * 100).toFixed(1) + '%');
+
     checkWinCondition();
 }
 
@@ -522,10 +530,9 @@ function performSlice(start, end) {
 
 // 更新 UI
 function updateUI() {
-    if (!currentShape) return;
+    if (!currentShape || !window.initialArea) return;
 
-    const originalArea = window.initialArea || currentShape.getArea();
-    const currentPercent = (currentShape.getArea() / originalArea) * 100;
+    const currentPercent = (currentShape.getArea() / window.initialArea) * 100;
 
     document.getElementById('currentPercent').textContent = currentPercent.toFixed(1) + '%';
     document.getElementById('targetPercent').textContent = targetPercent + '%';
