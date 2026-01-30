@@ -564,11 +564,13 @@ function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
         });
     }
 
-    // 創建邊緣屬性（根據上傳的圖片，標記兩條紅線）
-    // 邊緣索引對應頂點 i 到 i+1
+    // 創建邊緣屬性（根據上傳的新圖片，標記紅線）
+    // 五角星有10個頂點，編號0-9（從頂部順時針）
+    // 邊緣 i 連接頂點 i 到頂點 i+1
+    // 根據新圖片，紅線覆蓋右側的多條邊：邊緣 1, 2, 3, 4, 5
     const edgeProperties = vertices.map((_, i) => {
-        // 根據圖片：上方水平段（頂點1->2）和下方對角段（頂點7->8）
-        const isRedLine = (i === 1) || (i === 7);
+        // 紅線邊緣：1(右上), 2(右內), 3(右下內), 4(右下), 5(底部右)
+        const isRedLine = (i === 1 || i === 2 || i === 3 || i === 4 || i === 5);
         return {
             color: isRedLine ? '#FF0000' : '#000000',
             cuttable: !isRedLine
