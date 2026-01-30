@@ -468,9 +468,9 @@ function performEdgeBasedCut(entryPoint, exitPoint) {
 
     console.log('✅ 切割成功！面積:', { area1: Math.round(area1), area2: Math.round(area2) });
 
-    // 確定哪個是較大的部分
+    // 確定哪個是較小的部分（保留較小的，讓較大的掉落）
     let keepPoly, discardPoly;
-    if (area1 > area2) {
+    if (area1 < area2) {
         keepPoly = poly1;
         discardPoly = poly2;
     } else {
@@ -516,9 +516,9 @@ function performSlice(start, end) {
 
     console.log('✂️ 滑動手勢切割！面積:', { area1: Math.round(area1), area2: Math.round(area2) });
 
-    // 確定哪個是較大的部分
+    // 確定哪個是較小的部分（保留較小的，讓較大的掉落）
     let keepPoly, discardPoly;
-    if (area1 > area2) {
+    if (area1 < area2) {
         keepPoly = poly1;
         discardPoly = poly2;
     } else {
@@ -581,7 +581,7 @@ function gameLoop() {
 
     // 繪製圖形
     if (currentShape && gameState === 'playing') {
-        currentShape.draw('#9B59B6', 4, '#000000'); // 紫色，黑色邊框
+        currentShape.draw('#FF6B35', 4, '#000000'); // 橙色，黑色邊框
     }
 
     // 更新並繪製掉落的碎片
@@ -658,7 +658,7 @@ function gameLoop() {
 // 啟動遊戲
 // ============================================================================
 document.getElementById('startButton').addEventListener('click', async () => {
-    console.log("Game Version: v1.5");
+    console.log("Game Version: v1.6");
     try {
         document.getElementById('startScreen').classList.add('hidden');
 
