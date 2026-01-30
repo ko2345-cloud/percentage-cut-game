@@ -139,6 +139,34 @@ class Polygon {
         return collisions;
     }
 
+    // 檢查切割線是否穿過不可切割的邊緣（紅線）
+    checkCutThroughUncuttableEdge(lineStart, lineEnd) {
+        const n = this.vertices.length;
+
+        for (let i = 0; i < n; i++) {
+            const j = (i + 1) % n;
+
+            // 如果這條邊不可切割
+            if (!this.edgeProperties[i].cuttable) {
+                const v1 = this.vertices[i];
+                const v2 = this.vertices[j];
+
+                // 檢查切割線是否與這條紅線相交
+                const intersection = getLineIntersection(lineStart, lineEnd, v1, v2);
+
+                if (intersection) {
+                    console.log('🚫 切割線穿過紅線！', {
+                        edgeIndex: i,
+                        intersection: intersection
+                    });
+                    return true; // 找到交點，表示穿過紅線
+                }
+            }
+        }
+
+        return false; // 沒有穿過任何紅線
+    }
+
     // 找到從外部點到內部點穿過邊緣的交點
     findEdgeIntersection(outsidePoint, insidePoint) {
         const n = this.vertices.length;
@@ -675,6 +703,13 @@ function performEdgeBasedCut(entryPoint, exitPoint) {
 
     console.log('🔪 開始切割...', { entry: entryPoint, exit: exitPoint });
 
+    // 檢查切割線是否穿過紅線（不可切割的邊緣）
+    if (currentShape.checkCutThroughUncuttableEdge(entryPoint, exitPoint)) {
+        console.log('❌ 切割被紅線阻擋！');
+        showMessage('🚫 紅線無法切割！');
+        return; // 阻止切割
+    }
+
     const result = currentShape.slice(entryPoint, exitPoint);
     if (!result) {
         console.log('❌ 切割失敗 - 無法找到兩個交點');
@@ -736,6 +771,13 @@ function checkWinCondition() {
 // 執行切割（保留舊的滑動手勢功能）
 function performSlice(start, end) {
     if (!currentShape || gameState !== 'playing') return;
+
+    // 檢查切割線是否穿過紅線
+    if (currentShape.checkCutThroughUncuttableEdge(start, end)) {
+        console.log('❌ 滑動切割被紅線阻擋！');
+        showMessage('🚫 紅線無法切割！');
+        return;
+    }
 
     const result = currentShape.slice(start, end);
     if (!result) return;
@@ -902,7 +944,7 @@ function gameLoop() {
 // 啟動遊戲
 // ============================================================================
 document.getElementById('startButton').addEventListener('click', async () => {
-    console.log("Game Version: v1.7");
+    console.log("Game Version: v1.8");
     try {
         document.getElementById('startScreen').classList.add('hidden');
 
