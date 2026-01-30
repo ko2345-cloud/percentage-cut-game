@@ -353,9 +353,20 @@ class Bomb {
     }
 
     update() {
-        // 移動炸彈
-        this.x += this.vx * this.speed;
-        this.y += this.vy * this.speed;
+        // 計算下一個位置
+        const nextX = this.x + this.vx * this.speed;
+        const nextY = this.y + this.vy * this.speed;
+
+        // 檢查下一個位置是否在圖案內
+        const nextPos = { x: nextX, y: nextY };
+        if (currentShape && currentShape.isPointInside(nextPos)) {
+            // 在內部，正常移動
+            this.x = nextX;
+            this.y = nextY;
+        }
+        // 如果不在內部，不移動，等待gameLoop中的碰撞檢測來反彈
+
+        // 更新引信動畫
         this.fuseTime += 0.1;
     }
 
@@ -710,63 +721,79 @@ function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
 }
 
 // 創建關卡 3 的有機形狀 (基於上傳圖片)
+// 創建關卡 3 的跑步人形 (基於上傳圖片2)
 function createLevel3Shape(centerX, centerY, size) {
-    // 根據上傳圖片創建不規則形狀，類似人形/生物輪廓
-    const scale = size / 350;
-
+    const scale = size / 300;
+    
     const vertices = [
-        // 左上臂 (從頂部順時針開始)
-        { x: centerX - 160 * scale, y: centerY - 120 * scale },
-        { x: centerX - 180 * scale, y: centerY - 80 * scale },
-        { x: centerX - 190 * scale, y: centerY - 40 * scale },
-        { x: centerX - 170 * scale, y: centerY - 10 * scale },
-
-        // 左側軀幹
-        { x: centerX - 140 * scale, y: centerY + 20 * scale },
-        { x: centerX - 120 * scale, y: centerY + 60 * scale },
-
-        // 左下腿部
-        { x: centerX - 100 * scale, y: centerY + 100 * scale },
-        { x: centerX - 70 * scale, y: centerY + 140 * scale },
-        { x: centerX - 40 * scale, y: centerY + 170 * scale },
-
-        // 底部
-        { x: centerX, y: centerY + 180 * scale },
-
-        // 右下腿部  
-        { x: centerX + 40 * scale, y: centerY + 170 * scale },
-        { x: centerX + 70 * scale, y: centerY + 140 * scale },
-        { x: centerX + 100 * scale, y: centerY + 100 * scale },
-
-        // 右側軀幹
-        { x: centerX + 120 * scale, y: centerY + 60 * scale },
-        { x: centerX + 140 * scale, y: centerY + 20 * scale },
-
-        // 右上臂
-        { x: centerX + 170 * scale, y: centerY - 10 * scale },
-        { x: centerX + 190 * scale, y: centerY - 40 * scale },
-        { x: centerX + 180 * scale, y: centerY - 80 * scale },
-        { x: centerX + 160 * scale, y: centerY - 120 * scale },
-
-        // 頭部右側 (紅色圓圈區域開始)
-        { x: centerX + 80 * scale, y: centerY - 140 * scale },
-        { x: centerX + 40 * scale, y: centerY - 160 * scale },
-        { x: centerX, y: centerY - 170 * scale },
-        { x: centerX - 40 * scale, y: centerY - 160 * scale },
-        { x: centerX - 80 * scale, y: centerY - 140 * scale },
-        // 頭部左側 (紅色圓圈區域結束)
+        // 左手臂（從左上開始，順時針）
+        { x: centerX - 140 * scale, y: centerY - 100 * scale },
+        { x: centerX - 150 * scale, y: centerY - 70 * scale },
+        { x: centerX - 145 * scale, y: centerY - 40 * scale },
+        { x: centerX - 130 * scale, y: centerY - 20 * scale },
+        { x: centerX - 110 * scale, y: centerY - 10 * scale },
+        
+        // 頭部（紅色圓圈）
+        { x: centerX - 70 * scale, y: centerY - 120 * scale },
+        { x: centerX - 40 * scale, y: centerY - 135 * scale },
+        { x: centerX, y: centerY - 140 * scale },
+        { x: centerX + 40 * scale, y: centerY - 135 * scale },
+        { x: centerX + 70 * scale, y: centerY - 120 * scale },
+        
+        // 右手臂
+        { x: centerX + 90 * scale, y: centerY - 90 * scale },
+        { x: centerX + 110 * scale, y: centerY - 60 * scale },
+        { x: centerX + 140 * scale, y: centerY - 30 * scale },
+        { x: centerX + 155 * scale, y: centerY },
+        { x: centerX + 150 * scale, y: centerY + 30 * scale },
+        { x: centerX + 130 * scale, y: centerY + 50 * scale },
+        { x: centerX + 110 * scale, y: centerY + 60 * scale },
+        
+        // 右側身體
+        { x: centerX + 80 * scale, y: centerY + 70 * scale },
+        { x: centerX + 70 * scale, y: centerY + 90 * scale },
+        
+        // 右腿（紅線）
+        { x: centerX + 90 * scale, y: centerY + 120 * scale },
+        { x: centerX + 100 * scale, y: centerY + 150 * scale },
+        { x: centerX + 95 * scale, y: centerY + 180 * scale },
+        { x: centerX + 80 * scale, y: centerY + 200 * scale },
+        { x: centerX + 60 * scale, y: centerY + 210 * scale },
+        { x: centerX + 40 * scale, y: centerY + 205 * scale },
+        { x: centerX + 30 * scale, y: centerY + 190 * scale },
+        { x: centerX + 35 * scale, y: centerY + 170 * scale },
+        
+        // 中間身體
+        { x: centerX + 20 * scale, y: centerY + 140 * scale },
+        { x: centerX, y: centerY + 120 * scale },
+        
+        // 左腿
+        { x: centerX - 30 * scale, y: centerY + 150 * scale },
+        { x: centerX - 50 * scale, y: centerY + 170 * scale },
+        { x: centerX - 60 * scale, y: centerY + 185 * scale },
+        { x: centerX - 55 * scale, y: centerY + 200 * scale },
+        { x: centerX - 40 * scale, y: centerY + 205 * scale },
+        { x: centerX - 20 * scale, y: centerY + 195 * scale },
+        { x: centerX - 10 * scale, y: centerY + 175 * scale },
+        { x: centerX - 15 * scale, y: centerY + 150 * scale },
+        
+        // 左側身體
+        { x: centerX - 30 * scale, y: centerY + 120 * scale },
+        { x: centerX - 50 * scale, y: centerY + 90 * scale },
+        { x: centerX - 70 * scale, y: centerY + 60 * scale },
+        { x: centerX - 90 * scale, y: centerY + 30 * scale },
+        { x: centerX - 100 * scale, y: centerY }
     ];
-
-    // 設置紅線 - 頭部圓圈區域 (最後5條邊)
+    
+    // 設置紅線：頭部圓圈(5-9)和右腿(20-27)
     const edgeProperties = vertices.map((_, i) => {
-        // 頭部紅線區域：邊緣 19-23 (連接頭部的圓圈)
-        const isRedLine = (i >= 19 && i <= 23);
+        const isRedLine = (i >= 5 && i <= 9) || (i >= 20 && i <= 27);
         return {
             color: isRedLine ? '#FF0000' : '#000000',
             cuttable: !isRedLine
         };
     });
-
+    
     return new Polygon(vertices, edgeProperties);
 }
 
