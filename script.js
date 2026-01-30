@@ -451,7 +451,13 @@ class Bomb {
     checkCutLineCollision(lineStart, lineEnd) {
         // 計算點到線段的距離
         const distance = pointToSegmentDistance({ x: this.x, y: this.y }, lineStart, lineEnd);
-        return distance < this.radius + 5; // 增加一點容差
+        const isCollision = distance < this.radius + 15; // 增加容差使碰撞更容易檢測
+
+        if (isCollision) {
+            console.log(`💣 炸彈碰撞！距離: ${distance.toFixed(2)}, 炸彈位置: (${this.x.toFixed(0)}, ${this.y.toFixed(0)})`);
+        }
+
+        return isCollision;
     }
 }
 
@@ -705,55 +711,56 @@ function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
 
 // 創建關卡 3 的有機形狀 (基於上傳圖片)
 function createLevel3Shape(centerX, centerY, size) {
-    // 創建不規則的有機形狀，類似人體輪廓
-    const scale = size / 400;
+    // 根據上傳圖片創建不規則形狀，類似人形/生物輪廓
+    const scale = size / 350;
+
     const vertices = [
-        // 左上肢
-        { x: centerX - 180 * scale, y: centerY - 150 * scale },
-        { x: centerX - 200 * scale, y: centerY - 100 * scale },
-        { x: centerX - 190 * scale, y: centerY - 50 * scale },
-        { x: centerX - 150 * scale, y: centerY - 20 * scale },
+        // 左上臂 (從頂部順時針開始)
+        { x: centerX - 160 * scale, y: centerY - 120 * scale },
+        { x: centerX - 180 * scale, y: centerY - 80 * scale },
+        { x: centerX - 190 * scale, y: centerY - 40 * scale },
+        { x: centerX - 170 * scale, y: centerY - 10 * scale },
 
-        // 頭部區域（紅色圓圈）
-        { x: centerX - 100 * scale, y: centerY - 180 * scale },
-        { x: centerX - 50 * scale, y: centerY - 200 * scale },
-        { x: centerX, y: centerY - 210 * scale },
-        { x: centerX + 50 * scale, y: centerY - 200 * scale },
-        { x: centerX + 100 * scale, y: centerY - 180 * scale },
+        // 左側軀幹
+        { x: centerX - 140 * scale, y: centerY + 20 * scale },
+        { x: centerX - 120 * scale, y: centerY + 60 * scale },
 
-        // 右上肢
-        { x: centerX + 150 * scale, y: centerY - 20 * scale },
-        { x: centerX + 190 * scale, y: centerY - 50 * scale },
-        { x: centerX + 200 * scale, y: centerY - 100 * scale },
-        { x: centerX + 180 * scale, y: centerY - 150 * scale },
+        // 左下腿部
+        { x: centerX - 100 * scale, y: centerY + 100 * scale },
+        { x: centerX - 70 * scale, y: centerY + 140 * scale },
+        { x: centerX - 40 * scale, y: centerY + 170 * scale },
 
-        // 右側身體
-        { x: centerX + 160 * scale, y: centerY },
-        { x: centerX + 140 * scale, y: centerY + 50 * scale },
+        // 底部
+        { x: centerX, y: centerY + 180 * scale },
 
-        // 右下肢部
-        { x: centerX + 120 * scale, y: centerY + 100 * scale },
-        { x: centerX + 100 * scale, y: centerY + 150 * scale },
-        { x: centerX + 80 * scale, y: centerY + 180 * scale },
-        { x: centerX + 50 * scale, y: centerY + 200 * scale },
+        // 右下腿部  
+        { x: centerX + 40 * scale, y: centerY + 170 * scale },
+        { x: centerX + 70 * scale, y: centerY + 140 * scale },
+        { x: centerX + 100 * scale, y: centerY + 100 * scale },
 
-        // 下方中心
-        { x: centerX, y: centerY + 210 * scale },
+        // 右側軀幹
+        { x: centerX + 120 * scale, y: centerY + 60 * scale },
+        { x: centerX + 140 * scale, y: centerY + 20 * scale },
 
-        // 左下肢部
-        { x: centerX - 50 * scale, y: centerY + 200 * scale },
-        { x: centerX - 80 * scale, y: centerY + 180 * scale },
-        { x: centerX - 100 * scale, y: centerY + 150 * scale },
-        { x: centerX - 120 * scale, y: centerY + 100 * scale },
+        // 右上臂
+        { x: centerX + 170 * scale, y: centerY - 10 * scale },
+        { x: centerX + 190 * scale, y: centerY - 40 * scale },
+        { x: centerX + 180 * scale, y: centerY - 80 * scale },
+        { x: centerX + 160 * scale, y: centerY - 120 * scale },
 
-        // 左側身體
-        { x: centerX - 140 * scale, y: centerY + 50 * scale },
-        { x: centerX - 160 * scale, y: centerY }
+        // 頭部右側 (紅色圓圈區域開始)
+        { x: centerX + 80 * scale, y: centerY - 140 * scale },
+        { x: centerX + 40 * scale, y: centerY - 160 * scale },
+        { x: centerX, y: centerY - 170 * scale },
+        { x: centerX - 40 * scale, y: centerY - 160 * scale },
+        { x: centerX - 80 * scale, y: centerY - 140 * scale },
+        // 頭部左側 (紅色圓圈區域結束)
     ];
 
-    // 設置紅線區域（頭部圓圈區域，邊緣 4-8）
+    // 設置紅線 - 頭部圓圈區域 (最後5條邊)
     const edgeProperties = vertices.map((_, i) => {
-        const isRedLine = (i >= 4 && i <= 8);
+        // 頭部紅線區域：邊緣 19-23 (連接頭部的圓圈)
+        const isRedLine = (i >= 19 && i <= 23);
         return {
             color: isRedLine ? '#FF0000' : '#000000',
             cuttable: !isRedLine
@@ -1079,6 +1086,15 @@ function checkWinCondition() {
 // 執行切割（保留舊的滑動手勢功能）
 function performSlice(start, end) {
     if (!currentShape || gameState !== 'playing') return;
+
+    // 檢查切割線是否碰到炸彈
+    for (let bomb of bombs) {
+        if (bomb.checkCutLineCollision(start, end)) {
+            console.log('💥 滑動切割碰到炸彈！');
+            triggerExplosion(bomb.x, bomb.y);
+            return; // 遊戲失敗，不執行切割
+        }
+    }
 
     // 檢查切割線是否穿過紅線
     if (currentShape.checkCutThroughUncuttableEdge(start, end)) {
