@@ -720,91 +720,94 @@ function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
     return new Polygon(vertices, edgeProperties);
 }
 
-// 創建關卡 3 的倒地輪廓 (Dead Body Outline) v2.2
+/ 創建關卡 3 的十字架形狀 (v2.2)
 function createLevel3Shape(centerX, centerY, size) {
-    const scale = size / 280;
+    const scale = size / 180;
     const vertices = [
-        // === 頭部 (不規則圓形) - (12個頂點) ===
-        { x: centerX - 10 * scale, y: centerY - 130 * scale },
-        { x: centerX + 15 * scale, y: centerY - 128 * scale },
-        { x: centerX + 30 * scale, y: centerY - 115 * scale },
-        { x: centerX + 35 * scale, y: centerY - 100 * scale },
-        { x: centerX + 32 * scale, y: centerY - 85 * scale },
-        { x: centerX + 25 * scale, y: centerY - 75 * scale },
-        { x: centerX + 35 * scale, y: centerY - 70 * scale }, // 連接右肩
-        // === 右手臂 (向外彎曲) - (14個頂點) ===
-        { x: centerX + 60 * scale, y: centerY - 72 * scale },
-        { x: centerX + 85 * scale, y: centerY - 80 * scale },
-        { x: centerX + 105 * scale, y: centerY - 95 * scale },
-        { x: centerX + 120 * scale, y: centerY - 100 * scale }, // 右手掌位置
-        { x: centerX + 130 * scale, y: centerY - 90 * scale },
-        { x: centerX + 125 * scale, y: centerY - 80 * scale },
-        { x: centerX + 110 * scale, y: centerY - 65 * scale },
-        { x: centerX + 90 * scale, y: centerY - 50 * scale },
-        { x: centerX + 70 * scale, y: centerY - 40 * scale }, // 右腋下
-        { x: centerX + 75 * scale, y: centerY - 10 * scale }, // 右側軀幹
-        // === 右腿 (外張) - (16個頂點) ===
-        { x: centerX + 80 * scale, y: centerY + 30 * scale },
-        { x: centerX + 90 * scale, y: centerY + 60 * scale },
-        { x: centerX + 105 * scale, y: centerY + 90 * scale },
-        { x: centerX + 115 * scale, y: centerY + 120 * scale },
-        { x: centerX + 120 * scale, y: centerY + 140 * scale }, // 右腳尖
-        { x: centerX + 105 * scale, y: centerY + 150 * scale },
-        { x: centerX + 90 * scale, y: centerY + 145 * scale },
-        { x: centerX + 75 * scale, y: centerY + 125 * scale },
-        { x: centerX + 60 * scale, y: centerY + 100 * scale },
-        { x: centerX + 50 * scale, y: centerY + 70 * scale }, // 右大腿內側
-        // === 胯下與左腿 (微彎) - (18個頂點) ===
-        { x: centerX + 10 * scale, y: centerY + 80 * scale }, // 胯下中心
-        { x: centerX - 20 * scale, y: centerY + 75 * scale },
-        { x: centerX - 40 * scale, y: centerY + 90 * scale },
-        { x: centerX - 55 * scale, y: centerY + 115 * scale },
-        { x: centerX - 60 * scale, y: centerY + 145 * scale },
-        { x: centerX - 65 * scale, y: centerY + 165 * scale }, // 左腳尖
-        { x: centerX - 80 * scale, y: centerY + 160 * scale },
-        { x: centerX - 85 * scale, y: centerY + 140 * scale },
-        { x: centerX - 80 * scale, y: centerY + 110 * scale },
-        { x: centerX - 70 * scale, y: centerY + 85 * scale },
-        { x: centerX - 55 * scale, y: centerY + 55 * scale }, // 左大腿上部
-        { x: centerX - 60 * scale, y: centerY + 20 * scale }, // 左側軀幹下部
-        // === 左手臂 (向上彎曲，投降狀) - (16個頂點) ===
-        { x: centerX - 80 * scale, y: centerY - 10 * scale },
-        { x: centerX - 100 * scale, y: centerY - 30 * scale },
-        { x: centerX - 120 * scale, y: centerY - 55 * scale },
-        { x: centerX - 130 * scale, y: centerY - 75 * scale }, // 左手掌
-        { x: centerX - 125 * scale, y: centerY - 85 * scale },
-        { x: centerX - 110 * scale, y: centerY - 80 * scale },
-        { x: centerX - 95 * scale, y: centerY - 65 * scale },
-        { x: centerX - 80 * scale, y: centerY - 50 * scale },
-        { x: centerX - 65 * scale, y: centerY - 45 * scale }, // 左腋下
-        { x: centerX - 50 * scale, y: centerY - 65 * scale }, // 左肩
-        // === 回到頭部 ===
-        { x: centerX - 45 * scale, y: centerY - 80 * scale }, // 左頸部
-        { x: centerX - 40 * scale, y: centerY - 100 * scale },
-        { x: centerX - 30 * scale, y: centerY - 120 * scale }  // 閉合
+        // === 上方尖端 (8個頂點) ===
+        { x: centerX, y: centerY - 140 * scale },
+        { x: centerX + 15 * scale, y: centerY - 138 * scale },
+        { x: centerX + 22 * scale, y: centerY - 130 * scale },
+        { x: centerX + 25 * scale, y: centerY - 118 * scale },
+        { x: centerX + 22 * scale, y: centerY - 106 * scale },
+        { x: centerX + 15 * scale, y: centerY - 98 * scale },
+        { x: centerX + 8 * scale, y: centerY - 95 * scale },
+        { x: centerX, y: centerY - 93 * scale },
+        { x: centerX - 8 * scale, y: centerY - 95 * scale },
+        { x: centerX - 15 * scale, y: centerY - 98 * scale },
+        { x: centerX - 22 * scale, y: centerY - 106 * scale },
+        { x: centerX - 25 * scale, y: centerY - 118 * scale },
+        { x: centerX - 22 * scale, y: centerY - 130 * scale },
+        { x: centerX - 15 * scale, y: centerY - 138 * scale },
+        // === 右上到右臂 (5個頂點) ===
+        { x: centerX - 10 * scale, y: centerY - 60 * scale },
+        { x: centerX - 8 * scale, y: centerY - 40 * scale },
+        { x: centerX - 5 * scale, y: centerY - 20 * scale },
+        { x: centerX, y: centerY },
+        { x: centerX + 5 * scale, y: centerY + 15 * scale },
+        // === 右手臂 (7個頂點) ===
+        { x: centerX + 15 * scale, y: centerY + 18 * scale },
+        { x: centerX + 30 * scale, y: centerY + 20 * scale },
+        { x: centerX + 50 * scale, y: centerY + 18 * scale },
+        { x: centerX + 75 * scale, y: centerY + 12 * scale },
+        { x: centerX + 95 * scale, y: centerY + 2 * scale },
+        { x: centerX + 108 * scale, y: centerY - 12 * scale },
+        { x: centerX + 115 * scale, y: centerY - 28 * scale },
+        { x: centerX + 108 * scale, y: centerY - 42 * scale },
+        { x: centerX + 95 * scale, y: centerY - 52 * scale },
+        { x: centerX + 75 * scale, y: centerY - 58 * scale },
+        { x: centerX + 50 * scale, y: centerY - 60 * scale },
+        { x: centerX + 30 * scale, y: centerY - 58 * scale },
+        { x: centerX + 15 * scale, y: centerY - 55 * scale },
+        // === 右側身體到下方 (8個頂點) ===
+        { x: centerX + 10 * scale, y: centerY - 45 * scale },
+        { x: centerX + 8 * scale, y: centerY - 20 * scale },
+        { x: centerX + 5 * scale, y: centerY + 10 * scale },
+        { x: centerX + 3 * scale, y: centerY + 40 * scale },
+        { x: centerX + 2 * scale, y: centerY + 70 * scale },
+        { x: centerX + 1 * scale, y: centerY + 100 * scale },
+        { x: centerX, y: centerY + 130 * scale },
+        { x: centerX - 5 * scale, y: centerY + 150 * scale },
+        // === 下方尖端 (5個頂點) ===
+        { x: centerX - 8 * scale, y: centerY + 160 * scale },
+        { x: centerX - 10 * scale, y: centerY + 165 * scale },
+        { x: centerX - 8 * scale, y: centerY + 160 * scale },
+        { x: centerX - 5 * scale, y: centerY + 150 * scale },
+        // === 左側身體 (8個頂點) ===
+        { x: centerX, y: centerY + 130 * scale },
+        { x: centerX - 1 * scale, y: centerY + 100 * scale },
+        { x: centerX - 2 * scale, y: centerY + 70 * scale },
+        { x: centerX - 3 * scale, y: centerY + 40 * scale },
+        { x: centerX - 5 * scale, y: centerY + 10 * scale },
+        { x: centerX - 8 * scale, y: centerY - 20 * scale },
+        { x: centerX - 10 * scale, y: centerY - 45 * scale },
+        // === 左手臂 (13個頂點) ===
+        { x: centerX - 15 * scale, y: centerY - 55 * scale },
+        { x: centerX - 30 * scale, y: centerY - 58 * scale },
+        { x: centerX - 50 * scale, y: centerY - 60 * scale },
+        { x: centerX - 75 * scale, y: centerY - 58 * scale },
+        { x: centerX - 95 * scale, y: centerY - 52 * scale },
+        { x: centerX - 108 * scale, y: centerY - 42 * scale },
+        { x: centerX - 115 * scale, y: centerY - 28 * scale },
+        { x: centerX - 108 * scale, y: centerY - 12 * scale },
+        { x: centerX - 95 * scale, y: centerY + 2 * scale },
+        { x: centerX - 75 * scale, y: centerY + 12 * scale },
+        { x: centerX - 50 * scale, y: centerY + 18 * scale },
+        { x: centerX - 30 * scale, y: centerY + 20 * scale },
+        { x: centerX - 15 * scale, y: centerY + 18 * scale },
+        // === 回到頂部 (5個頂點) ===
+        { x: centerX - 5 * scale, y: centerY + 15 * scale },
+        { x: centerX, y: centerY },
+        { x: centerX + 5 * scale, y: centerY - 20 * scale },
+        { x: centerX + 8 * scale, y: centerY - 40 * scale },
+        { x: centerX + 10 * scale, y: centerY - 60 * scale }
     ];
-    // 設置邊緣屬性
-    // 這裡我模擬一些特定部位為紅線（不可切割），例如頭部和手掌腳掌末端
-    // 您可以根據遊戲難度需求調整紅線的範圍
-    const edgeProperties = vertices.map((_, i) => {
-        // 假設：頭部 (0-6) 和 四肢末端 為紅線
-        // 頭部: 0-6
-        // 右手末端: 10-12
-        // 右腳末端: 20-22
-        // 左腳末端: 34-36
-        // 左手末端: 45-47
-        const isRedLine =
-            (i >= 0 && i <= 6) ||    // 頭部
-            (i >= 10 && i <= 12) ||  // 右手尖
-            (i >= 20 && i <= 22) ||  // 右腳尖
-            (i >= 34 && i <= 36) ||  // 左腳尖
-            (i >= 45 && i <= 47);    // 左手尖
-        return {
-            color: isRedLine ? '#FF0000' : '#000000',
-            cuttable: !isRedLine
-        };
-    });
-    console.log('✨ 關卡3形狀v2.2：倒地輪廓 (Dead Body Outline)，共', vertices.length, '個頂點');
+    // 所有線都是黑色，無紅線保護區
+    const edgeProperties = vertices.map(() => ({
+        color: '#000000',
+        cuttable: true
+    }));
+    console.log('✨ 關卡3形狀v2.2：十字架，共', vertices.length, '個頂點');
     return new Polygon(vertices, edgeProperties);
 }
 
