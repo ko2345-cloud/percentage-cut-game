@@ -365,8 +365,8 @@ function detectSwipe() {
 
 // 初始化遊戲
 function initGame() {
-    // 創建正方形
-    const size = Math.min(canvas.width, canvas.height) * 0.4;
+    // 創建正方形 - 調整大小以匹配用戶要求
+    const size = Math.min(canvas.width, canvas.height) * 0.55; // 從 0.4 增加到 0.55
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
@@ -581,7 +581,7 @@ function gameLoop() {
 
     // 繪製圖形
     if (currentShape && gameState === 'playing') {
-        currentShape.draw('#4ECDC4', 4, '#000000'); // 淺藍色，黑色邊框
+        currentShape.draw('#9B59B6', 4, '#000000'); // 紫色，黑色邊框
     }
 
     // 更新並繪製掉落的碎片
@@ -658,7 +658,7 @@ function gameLoop() {
 // 啟動遊戲
 // ============================================================================
 document.getElementById('startButton').addEventListener('click', async () => {
-    console.log("Game Version: v1.4 (Fixed Percentage Calculation)");
+    console.log("Game Version: v1.5");
     try {
         document.getElementById('startScreen').classList.add('hidden');
 
