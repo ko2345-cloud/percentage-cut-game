@@ -34,6 +34,10 @@
                 <div class="stat-label">目前面積</div>
                 <div class="stat-value" id="currentPercent">100%</div>
             </div>
+            <div class="stat-box" id="timerBox" style="display: none;">
+                <div class="stat-label">剩餘時間</div>
+                <div class="stat-value" id="timerDisplay">30</div>
+            </div>
         </div>
 
         <!-- 遊戲狀態訊息 -->
@@ -43,13 +47,14 @@
         <div id="startScreen" class="start-screen">
             <h1>切割遊戲 - Percentage Cut</h1>
             <p>用雙手切割圖案，將面積減少到目標百分比！</p>
-            <p style="font-size: 14px; color: #aaa; margin-top: 5px;">v2.2</p>
+            <p style="font-size: 14px; color: #aaa; margin-top: 5px;">v2.6</p>
             <div class="level-selector">
                 <p style="font-size: 16px; margin-bottom: 10px; opacity: 0.8;">選擇關卡：</p>
                 <div class="level-buttons">
                     <button class="level-btn" data-level="1">關卡 1</button>
                     <button class="level-btn" data-level="2">關卡 2</button>
                     <button class="level-btn" data-level="3">關卡 3</button>
+                    <button class="level-btn" data-level="4">關卡 4</button>
                 </div>
             </div>
             <button id="startButton">開始遊戲</button>
@@ -63,7 +68,7 @@
         crossorigin="anonymous"></script>
 
     <!-- 遊戲腳本 -->
-    <script src="script.js?v=2.2"></script>
+    <script src="script.js?v=2.6"></script>
 </body>
 
 </html>

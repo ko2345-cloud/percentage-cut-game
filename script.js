@@ -9,13 +9,20 @@ let hands;
 let camera;
 let gameState = 'idle'; // idle, playing, won, lost
 let currentShape = null;
-let currentLevel = 1; // 1 = square, 2 = star, 3 = organic shape
+let currentLevel = 1; // 1 = square, 2 = star, 3 = cross, 4 = circle
 let selectedLevel = 1; // User's level selection
 let targetPercent = 10;
+let minTargetPercent = 10; // 關卡4的最小目標
+let maxTargetPercent = 20; // 關卡4的最大目標
 let swipeStart = null;
 let swipeEnd = null;
 let tracking = false;
 let redLineCollisionCooldown = 0; // 防止重複觸發碰撞
+
+// 計時器相關變數（關卡4）
+let gameTimer = null; // 計時器ID
+let timeRemaining = 30; // 剩餘秒數
+let timerActive = false; // 計時器是否啟動
 
 // 切割狀態追蹤
 let cuttingState = {
@@ -638,6 +645,20 @@ function onHandsResults(results) {
                         redLineCollisionCooldown = 30; // 約 500ms (assuming 60fps)
                     }
                 }
+
+                // 檢查手部是否碰到炸彈（關卡3）
+                if (currentLevel === 3 && bombs.length > 0) {
+                    for (let bomb of bombs) {
+                        const distance = Math.sqrt((x - bomb.x) ** 2 + (y - bomb.y) ** 2);
+
+                        // 如果手部碰到炸彈（距離小於炸彈半徑 + 手部檢測範圍）
+                        if (distance < bomb.radius + 25) {
+                            console.log('💥 手部碰到炸彈！觸發爆炸');
+                            triggerExplosion(bomb.x, bomb.y);
+                            return; // 立即結束，遊戲失敗
+                        }
+                    }
+                }
             }
 
             // 減少碰撞冷卻
@@ -720,94 +741,65 @@ function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
     return new Polygon(vertices, edgeProperties);
 }
 
-// 創建關卡 3 的十字架形狀 (v2.2)
+// 創建關卡 3 的十字架形狀 (v2.4 - 簡單空心十字)
 function createLevel3Shape(centerX, centerY, size) {
-    const scale = size / 180;
-    const vertices = [
-        // === 上方尖端 (8個頂點) ===
-        { x: centerX, y: centerY - 140 * scale },
-        { x: centerX + 15 * scale, y: centerY - 138 * scale },
-        { x: centerX + 22 * scale, y: centerY - 130 * scale },
-        { x: centerX + 25 * scale, y: centerY - 118 * scale },
-        { x: centerX + 22 * scale, y: centerY - 106 * scale },
-        { x: centerX + 15 * scale, y: centerY - 98 * scale },
-        { x: centerX + 8 * scale, y: centerY - 95 * scale },
-        { x: centerX, y: centerY - 93 * scale },
-        { x: centerX - 8 * scale, y: centerY - 95 * scale },
-        { x: centerX - 15 * scale, y: centerY - 98 * scale },
-        { x: centerX - 22 * scale, y: centerY - 106 * scale },
-        { x: centerX - 25 * scale, y: centerY - 118 * scale },
-        { x: centerX - 22 * scale, y: centerY - 130 * scale },
-        { x: centerX - 15 * scale, y: centerY - 138 * scale },
-        // === 右上到右臂 (5個頂點) ===
-        { x: centerX - 10 * scale, y: centerY - 60 * scale },
-        { x: centerX - 8 * scale, y: centerY - 40 * scale },
-        { x: centerX - 5 * scale, y: centerY - 20 * scale },
-        { x: centerX, y: centerY },
-        { x: centerX + 5 * scale, y: centerY + 15 * scale },
-        // === 右手臂 (7個頂點) ===
-        { x: centerX + 15 * scale, y: centerY + 18 * scale },
-        { x: centerX + 30 * scale, y: centerY + 20 * scale },
-        { x: centerX + 50 * scale, y: centerY + 18 * scale },
-        { x: centerX + 75 * scale, y: centerY + 12 * scale },
-        { x: centerX + 95 * scale, y: centerY + 2 * scale },
-        { x: centerX + 108 * scale, y: centerY - 12 * scale },
-        { x: centerX + 115 * scale, y: centerY - 28 * scale },
-        { x: centerX + 108 * scale, y: centerY - 42 * scale },
-        { x: centerX + 95 * scale, y: centerY - 52 * scale },
-        { x: centerX + 75 * scale, y: centerY - 58 * scale },
-        { x: centerX + 50 * scale, y: centerY - 60 * scale },
-        { x: centerX + 30 * scale, y: centerY - 58 * scale },
-        { x: centerX + 15 * scale, y: centerY - 55 * scale },
-        // === 右側身體到下方 (8個頂點) ===
-        { x: centerX + 10 * scale, y: centerY - 45 * scale },
-        { x: centerX + 8 * scale, y: centerY - 20 * scale },
-        { x: centerX + 5 * scale, y: centerY + 10 * scale },
-        { x: centerX + 3 * scale, y: centerY + 40 * scale },
-        { x: centerX + 2 * scale, y: centerY + 70 * scale },
-        { x: centerX + 1 * scale, y: centerY + 100 * scale },
-        { x: centerX, y: centerY + 130 * scale },
-        { x: centerX - 5 * scale, y: centerY + 150 * scale },
-        // === 下方尖端 (5個頂點) ===
-        { x: centerX - 8 * scale, y: centerY + 160 * scale },
-        { x: centerX - 10 * scale, y: centerY + 165 * scale },
-        { x: centerX - 8 * scale, y: centerY + 160 * scale },
-        { x: centerX - 5 * scale, y: centerY + 150 * scale },
-        // === 左側身體 (8個頂點) ===
-        { x: centerX, y: centerY + 130 * scale },
-        { x: centerX - 1 * scale, y: centerY + 100 * scale },
-        { x: centerX - 2 * scale, y: centerY + 70 * scale },
-        { x: centerX - 3 * scale, y: centerY + 40 * scale },
-        { x: centerX - 5 * scale, y: centerY + 10 * scale },
-        { x: centerX - 8 * scale, y: centerY - 20 * scale },
-        { x: centerX - 10 * scale, y: centerY - 45 * scale },
-        // === 左手臂 (13個頂點) ===
-        { x: centerX - 15 * scale, y: centerY - 55 * scale },
-        { x: centerX - 30 * scale, y: centerY - 58 * scale },
-        { x: centerX - 50 * scale, y: centerY - 60 * scale },
-        { x: centerX - 75 * scale, y: centerY - 58 * scale },
-        { x: centerX - 95 * scale, y: centerY - 52 * scale },
-        { x: centerX - 108 * scale, y: centerY - 42 * scale },
-        { x: centerX - 115 * scale, y: centerY - 28 * scale },
-        { x: centerX - 108 * scale, y: centerY - 12 * scale },
-        { x: centerX - 95 * scale, y: centerY + 2 * scale },
-        { x: centerX - 75 * scale, y: centerY + 12 * scale },
-        { x: centerX - 50 * scale, y: centerY + 18 * scale },
-        { x: centerX - 30 * scale, y: centerY + 20 * scale },
-        { x: centerX - 15 * scale, y: centerY + 18 * scale },
-        // === 回到頂部 (5個頂點) ===
-        { x: centerX - 5 * scale, y: centerY + 15 * scale },
-        { x: centerX, y: centerY },
-        { x: centerX + 5 * scale, y: centerY - 20 * scale },
-        { x: centerX + 8 * scale, y: centerY - 40 * scale },
-        { x: centerX + 10 * scale, y: centerY - 60 * scale }
+    const scale = size / 400; // 基準尺寸 400
+    const thickness = 40 * scale; // 十字臂的厚度
+    const armLength = 200 * scale; // 臂長
+
+    // 空心十字的外輪廓（順時針）
+    const outerVertices = [
+        // 上臂 - 從左上角開始順時針
+        { x: centerX - thickness, y: centerY - armLength },
+        { x: centerX + thickness, y: centerY - armLength },
+        { x: centerX + thickness, y: centerY - thickness },
+
+        // 右臂
+        { x: centerX + armLength, y: centerY - thickness },
+        { x: centerX + armLength, y: centerY + thickness },
+        { x: centerX + thickness, y: centerY + thickness },
+
+        // 下臂
+        { x: centerX + thickness, y: centerY + armLength },
+        { x: centerX - thickness, y: centerY + armLength },
+        { x: centerX - thickness, y: centerY + thickness },
+
+        // 左臂
+        { x: centerX - armLength, y: centerY + thickness },
+        { x: centerX - armLength, y: centerY - thickness },
+        { x: centerX - thickness, y: centerY - thickness }
     ];
+
     // 所有線都是黑色，無紅線保護區
+    const edgeProperties = outerVertices.map(() => ({
+        color: '#000000',
+        cuttable: true
+    }));
+
+    console.log('✨ 關卡3形狀v2.4：空心十字，共', outerVertices.length, '個頂點');
+    return new Polygon(outerVertices, edgeProperties);
+}
+
+// 創建關卡 4 的圓形 (v2.6)
+function createCircleShape(centerX, centerY, radius, segments = 64) {
+    const vertices = [];
+
+    // 生成圓形頂點
+    for (let i = 0; i < segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        vertices.push({
+            x: centerX + Math.cos(angle) * radius,
+            y: centerY + Math.sin(angle) * radius
+        });
+    }
+
+    // 所有線都是黑色，完全可切割
     const edgeProperties = vertices.map(() => ({
         color: '#000000',
         cuttable: true
     }));
-    console.log('✨ 關卡3形狀v2.2：十字架，共', vertices.length, '個頂點');
+
+    console.log('✨ 關卡4形狀v2.6：圓形，共', vertices.length, '個頂點');
     return new Polygon(vertices, edgeProperties);
 }
 
@@ -876,7 +868,7 @@ function initGame() {
     const cy = canvas.height / 2;
 
     if (currentLevel === 1) {
-        // 關卡 1: 正方形
+        // 關卡1: 正方形
         currentShape = new Polygon([
             { x: cx - size / 2, y: cy - size / 2 },
             { x: cx + size / 2, y: cy - size / 2 },
@@ -884,29 +876,62 @@ function initGame() {
             { x: cx - size / 2, y: cy + size / 2 }
         ]);
     } else if (currentLevel === 2) {
-        // 關卡 2: 五角星（有紅線）
+        // 關卡2: 五角星（有紅線）
         const outerRadius = size / 2;
         const innerRadius = outerRadius * 0.38; // 標準五角星比例
         currentShape = createStarPolygon(cx, cy, outerRadius, innerRadius);
     } else if (currentLevel === 3) {
-        // 關卡 3: 有機形狀（有紅線）
+        // 關卡3: 空心十字架
         currentShape = createLevel3Shape(cx, cy, size);
+    } else if (currentLevel === 4) {
+        // 關卡4: 圓形
+        const radius = size / 2;
+        currentShape = createCircleShape(cx, cy, radius, 64);
     }
 
     // 初始化原始面積
     window.initialArea = currentShape.getArea();
     console.log(`🎮 遊戲初始化！關卡 ${currentLevel}，原始面積:`, window.initialArea);
 
-    targetPercent = 10;
+    // 關卡4設置範圍目標，其他關卡設置單一目標
+    if (currentLevel === 4) {
+        minTargetPercent = 10;
+        maxTargetPercent = 20;
+        targetPercent = 15; // 顯示中間值
+    } else {
+        targetPercent = 10;
+        minTargetPercent = 10;
+        maxTargetPercent = 10;
+    }
+
     gameState = 'playing';
     fallingPieces = [];
     sparks = [];
 
-    // 只在關卡3初始化炸彈
+    // 關卡3和4初始化炸彈
     bombs = [];
     if (currentLevel === 3) {
         spawnBomb();
         console.log('💣 關卡3：已生成炸彈');
+    } else if (currentLevel === 4) {
+        // 關卡4: 生成2個炸彈（一快一慢）
+        spawnBombForLevel4(1.5); // 慢速
+        spawnBombForLevel4(3.5); // 快速
+        console.log('💣 關卡4：已生成 2 個炸彈（快/慢）');
+    }
+
+    // 關卡4啟動計時器
+    stopTimer(); // 清除舊計時器
+    if (currentLevel === 4) {
+        timeRemaining = 30;
+        timerActive = true;
+        startTimer();
+        // 顯示計時器UI
+        document.getElementById('timerBox').style.display = 'block';
+    } else {
+        timerActive = false;
+        // 隱藏計時器UI
+        document.getElementById('timerBox').style.display = 'none';
     }
 
     updateUI();
@@ -937,6 +962,77 @@ function spawnBomb() {
 
     bombs.push(new Bomb(centerX, centerY, vx, vy, speed));
     console.log(`💣 炸彈已生成！速度: ${speed}`);
+}
+
+// 生成關卡4的炸彈（指定速度）
+function spawnBombForLevel4(speed) {
+    if (!currentShape) return;
+
+    // 計算形狀的中心點
+    let centerX = 0, centerY = 0;
+    currentShape.vertices.forEach(v => {
+        centerX += v.x;
+        centerY += v.y;
+    });
+    centerX /= currentShape.vertices.length;
+    centerY /= currentShape.vertices.length;
+
+    // 隨機方向
+    const angle = Math.random() * Math.PI * 2;
+    const vx = Math.cos(angle);
+    const vy = Math.sin(angle);
+
+    bombs.push(new Bomb(centerX, centerY, vx, vy, speed));
+}
+
+// 啟動計時器
+function startTimer() {
+    if (gameTimer) clearInterval(gameTimer);
+
+    gameTimer = setInterval(() => {
+        if (!timerActive || gameState !== 'playing') {
+            stopTimer();
+            return;
+        }
+
+        timeRemaining--;
+        updateTimerDisplay();
+
+        if (timeRemaining <= 0) {
+            stopTimer();
+            // 時間到，遊戲失敗
+            gameState = 'lost';
+            showMessage('⏰ 時間到！遊戲失敗！');
+
+            setTimeout(() => {
+                initGame(); // 重新開始關卡4
+            }, 3000);
+        }
+    }, 1000); // 每秒更新
+}
+
+// 停止計時器
+function stopTimer() {
+    if (gameTimer) {
+        clearInterval(gameTimer);
+        gameTimer = null;
+    }
+    timerActive = false;
+}
+
+// 更新計時器顯示
+function updateTimerDisplay() {
+    const timerEl = document.getElementById('timerDisplay');
+    if (timerEl) {
+        timerEl.textContent = timeRemaining;
+
+        // 時間少於10秒時變紅色
+        if (timeRemaining <= 10) {
+            timerEl.style.color = '#EF4444';
+        } else {
+            timerEl.style.color = '#FFFFFF';
+        }
+    }
 }
 
 
@@ -1038,14 +1134,14 @@ function performEdgeBasedCut(entryPoint, exitPoint) {
 
     console.log('✅ 切割成功！面積:', { area1: Math.round(area1), area2: Math.round(area2) });
 
-    // 確定哪個是較小的部分（保留較大的，讓較小的掉落）
+    // 確定哪個是較小的部分（保留較小的，讓較大的掉落）
     let keepPoly, discardPoly;
     if (area1 < area2) {
-        keepPoly = poly1;
-        discardPoly = poly2;
+        keepPoly = poly1;  // 保留較小的
+        discardPoly = poly2;  // 丟棄較大的
     } else {
-        keepPoly = poly2;
-        discardPoly = poly1;
+        keepPoly = poly2;  // 保留較小的
+        discardPoly = poly1;  // 丟棄較大的
     }
 
     // 移除在被捨棄區域內的炸彈
@@ -1112,27 +1208,65 @@ function checkWinCondition() {
     if (!currentShape || !window.initialArea) return;
 
     const currentPercent = (currentShape.getArea() / window.initialArea) * 100;
+
+    // 關卡4的特殊範圍檢查
+    if (currentLevel === 4) {
+        // 檢查是否小於最小目標（失敗）
+        if (currentPercent < minTargetPercent) {
+            gameState = 'lost';
+            stopTimer();
+            showMessage(`❌ 面積太小！低於 ${minTargetPercent}%！遊戲失敗！`);
+
+            setTimeout(() => {
+                initGame(); // 重新開始關卡4
+            }, 3000);
+            return;
+        }
+
+        // 檢查是否在目標範圍內（勝利）
+        if (currentPercent >= minTargetPercent && currentPercent <= maxTargetPercent) {
+            gameState = 'won';
+            stopTimer();
+            showMessage(`🎊 完美！面積在 ${minTargetPercent}%-${maxTargetPercent}% 範圍內！通關所有關卡！`);
+            return;
+        }
+
+        // 如果大於最大目標，繼續遊戲
+        return;
+    }
+
+    // 其他關卡的標準檢查
     if (currentPercent <= targetPercent) {
         if (currentLevel === 1) {
             // 進入第二關
+            gameState = 'won'; // 暫停遊戲
             currentLevel = 2;
             showMessage('🎉 第一關完成！進入五角星關卡...');
 
             setTimeout(() => {
+                gameState = 'playing'; // 重新開始遊戲
                 initGame();
             }, 2000);
         } else if (currentLevel === 2) {
             // 進入第三關
+            gameState = 'won'; // 暫停遊戲
             currentLevel = 3;
-            showMessage('🎉 第二關完成！進入最終關卡...');
+            showMessage('🎉 第二關完成！進入十字架關卡...');
 
             setTimeout(() => {
+                gameState = 'playing'; // 重新開始遊戲
                 initGame();
             }, 2000);
-        } else {
-            // 已完成所有關卡
-            gameState = 'won';
-            showMessage('🎊 恭喜！通關所有關卡！');
+        } else if (currentLevel === 3) {
+            // 進入第四關
+            gameState = 'won'; // 暫停遊戲
+            currentLevel = 4;
+            showMessage('🎉 第三關完成！進入最終關卡（計時挑戰）...');
+
+            setTimeout(() => {
+                gameState = 'playing'; // 重新開始遊戲
+                initGame();
+            }, 2000);
         }
     }
 }
@@ -1169,11 +1303,11 @@ function performSlice(start, end) {
     // 確定哪個是較小的部分（保留較小的，讓較大的掉落）
     let keepPoly, discardPoly;
     if (area1 < area2) {
-        keepPoly = poly1;
-        discardPoly = poly2;
+        keepPoly = poly1;  // 保留較小的
+        discardPoly = poly2;  // 丟棄較大的
     } else {
-        keepPoly = poly2;
-        discardPoly = poly1;
+        keepPoly = poly2;  // 保留較小的
+        discardPoly = poly1;  // 丟棄較大的
     }
 
     // 移除在被捨棄區域內的炸彈
@@ -1218,12 +1352,18 @@ function updateUI() {
     console.log('🔄 更新UI - 當前面積:', Math.round(currentArea), '原始面積:', Math.round(window.initialArea), '百分比:', currentPercent.toFixed(1) + '%');
 
     document.getElementById('currentPercent').textContent = currentPercent.toFixed(1) + '%';
-    document.getElementById('targetPercent').textContent = targetPercent + '%';
+
+    // 關卡4顯示範圍，其他關卡顯示單一數值
+    if (currentLevel === 4) {
+        document.getElementById('targetPercent').textContent = `${minTargetPercent}%-${maxTargetPercent}%`;
+    } else {
+        document.getElementById('targetPercent').textContent = targetPercent + '%';
+    }
 
     // 更新關卡顯示
     const levelDisplay = document.getElementById('levelDisplay');
     if (levelDisplay) {
-        levelDisplay.textContent = `關卡 ${currentLevel}`;
+        levelDisplay.textContent = currentLevel;
     }
 }
 
@@ -1247,10 +1387,11 @@ function gameLoop() {
 
     // 繪製圖形
     if (currentShape && gameState === 'playing') {
-        // 新的顏色方案
-        let shapeColor = '#3B82F6'; // 藍色 - Level 1
-        if (currentLevel === 2) shapeColor = '#EC4899'; // 粉紅色 - Level 2
-        if (currentLevel === 3) shapeColor = '#F97316'; // 橙色 - Level 3
+        // v2.6 新的顏色方案 - 更鮮明的配色
+        let shapeColor = '#10B981'; // 翠綠色 - Level 1
+        if (currentLevel === 2) shapeColor = '#8B5CF6'; // 紫色 - Level 2
+        if (currentLevel === 3) shapeColor = '#EF4444'; // 紅色 - Level 3
+        if (currentLevel === 4) shapeColor = '#F59E0B'; // 金色 - Level 4
 
         currentShape.draw(shapeColor, 4, '#000000');
     }
@@ -1370,7 +1511,7 @@ document.querySelectorAll('.level-btn').forEach(btn => {
 document.querySelector('.level-btn[data-level="1"]').classList.add('selected');
 
 document.getElementById('startButton').addEventListener('click', async () => {
-    console.log("Game Version: v1.9");
+    console.log("Game Version: v2.6");
     try {
         document.getElementById('startScreen').classList.add('hidden');
 

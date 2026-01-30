@@ -91,6 +91,12 @@ body {
     border: 2px solid rgba(78, 205, 196, 0.5);
 }
 
+/* 計時器框 - 橙色/火焰主題 */
+.stat-box:nth-child(4) {
+    background: rgba(251, 146, 60, 0.25);
+    border: 2px solid rgba(251, 146, 60, 0.5);
+}
+
 /* 響應式調整統計框 */
 @media (max-width: 768px) {
     .stat-box {
