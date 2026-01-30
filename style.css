@@ -73,14 +73,20 @@ body {
     transform: scale(1.05);
 }
 
+/* 關卡框 - 黃色/金色主題 */
+.stat-box:nth-child(1) {
+    background: rgba(255, 193, 7, 0.25);
+    border: 2px solid rgba(255, 193, 7, 0.5);
+}
+
 /* 目標框 - 紫色/粉色主題 */
-.stat-box:first-child {
+.stat-box:nth-child(2) {
     background: rgba(167, 139, 250, 0.25);
     border: 2px solid rgba(167, 139, 250, 0.5);
 }
 
 /* 目前面積框 - 青色/綠色主題 */
-.stat-box:last-child {
+.stat-box:nth-child(3) {
     background: rgba(78, 205, 196, 0.25);
     border: 2px solid rgba(78, 205, 196, 0.5);
 }

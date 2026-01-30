@@ -9,10 +9,12 @@ let hands;
 let camera;
 let gameState = 'idle'; // idle, playing, won, lost
 let currentShape = null;
+let currentLevel = 1; // 1 = square, 2 = star
 let targetPercent = 10;
 let swipeStart = null;
 let swipeEnd = null;
 let tracking = false;
+let redLineCollisionCooldown = 0; // 防止重複觸發碰撞
 
 // 切割狀態追蹤
 let cuttingState = {
@@ -24,6 +26,12 @@ let cuttingState = {
 
 // 掉落的圖形碎片
 let fallingPieces = [];
+
+// 火花粒子
+let sparks = [];
+
+// 碰撞音效
+let collisionSound = null;
 
 // ============================================================================
 // 初始化畫布尺寸
@@ -39,8 +47,14 @@ window.addEventListener('resize', resizeCanvas);
 // Polygon 類別 - 表示多邊形
 // ============================================================================
 class Polygon {
-    constructor(vertices) {
+    constructor(vertices, edgeProperties = null) {
         this.vertices = vertices; // [{x, y}, ...]
+        // edgeProperties: [{color: '#000000', cuttable: true}, ...] for each edge
+        // If null, all edges are black and cuttable
+        this.edgeProperties = edgeProperties || vertices.map(() => ({
+            color: '#000000',
+            cuttable: true
+        }));
     }
 
     // 計算多邊形面積（使用鞋帶公式）
@@ -59,11 +73,8 @@ class Polygon {
     draw(color = '#4ECDC4', lineWidth = 4, strokeColor = '#000000') {
         if (this.vertices.length < 3) return;
 
+        // 填充
         ctx.fillStyle = color;
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = lineWidth;
-        ctx.lineJoin = 'round';
-
         ctx.beginPath();
         ctx.moveTo(this.vertices[0].x, this.vertices[0].y);
         for (let i = 1; i < this.vertices.length; i++) {
@@ -71,7 +82,22 @@ class Polygon {
         }
         ctx.closePath();
         ctx.fill();
-        ctx.stroke();
+
+        // 繪製邊緣（每條邊可能有不同顏色）
+        ctx.lineWidth = lineWidth;
+        ctx.lineJoin = 'round';
+
+        const n = this.vertices.length;
+        for (let i = 0; i < n; i++) {
+            const j = (i + 1) % n;
+            const edgeColor = this.edgeProperties[i].color;
+
+            ctx.strokeStyle = edgeColor;
+            ctx.beginPath();
+            ctx.moveTo(this.vertices[i].x, this.vertices[i].y);
+            ctx.lineTo(this.vertices[j].x, this.vertices[j].y);
+            ctx.stroke();
+        }
     }
 
     // 檢查點是否在多邊形內（射線投射算法）
@@ -86,6 +112,31 @@ class Polygon {
             if (intersect) inside = !inside;
         }
         return inside;
+    }
+
+    // 檢查點是否碰撞到任何邊緣
+    checkPointEdgeCollision(point, threshold = 20) {
+        const n = this.vertices.length;
+        const collisions = [];
+
+        for (let i = 0; i < n; i++) {
+            const j = (i + 1) % n;
+            const v1 = this.vertices[i];
+            const v2 = this.vertices[j];
+
+            // 計算點到線段的距離
+            const distance = pointToSegmentDistance(point, v1, v2);
+
+            if (distance < threshold) {
+                collisions.push({
+                    edgeIndex: i,
+                    distance: distance,
+                    edgeProperty: this.edgeProperties[i]
+                });
+            }
+        }
+
+        return collisions;
     }
 
     // 找到從外部點到內部點穿過邊緣的交點
@@ -173,6 +224,55 @@ class Polygon {
 // ============================================================================
 
 // ============================================================================
+// 火花粒子類別
+// ============================================================================
+class Spark {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+
+        // 隨機速度（向四周爆炸）
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 3 + Math.random() * 5;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+
+        this.gravity = 0.3;
+        this.lifetime = 30 + Math.floor(Math.random() * 20); // 30-50 幀
+        this.age = 0;
+        this.size = 3 + Math.random() * 3; // 3-6px
+
+        // 顏色：橙色到黃色
+        const colors = ['#FFD700', '#FF6B35', '#FFA500', '#FF8C00'];
+        this.color = colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += this.gravity;
+        this.age++;
+    }
+
+    draw() {
+        const opacity = 1 - (this.age / this.lifetime);
+        const currentSize = this.size * opacity;
+
+        ctx.save();
+        ctx.globalAlpha = opacity;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, currentSize, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    isDead() {
+        return this.age >= this.lifetime;
+    }
+}
+
+// ============================================================================
 // 掉落碎片類別
 // ============================================================================
 class FallingPiece {
@@ -229,6 +329,35 @@ function getLineIntersection(p1, p2, p3, p4) {
         };
     }
     return null;
+}
+
+// 計算點到線段的最短距離
+function pointToSegmentDistance(point, segStart, segEnd) {
+    const px = point.x;
+    const py = point.y;
+    const x1 = segStart.x;
+    const y1 = segStart.y;
+    const x2 = segEnd.x;
+    const y2 = segEnd.y;
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lengthSquared = dx * dx + dy * dy;
+
+    if (lengthSquared === 0) {
+        // 線段退化為點
+        return Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+    }
+
+    // 計算投影參數 t
+    let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+    t = Math.max(0, Math.min(1, t)); // 限制在 [0, 1]
+
+    // 最近點
+    const closestX = x1 + t * dx;
+    const closestY = y1 + t * dy;
+
+    return Math.sqrt((px - closestX) * (px - closestX) + (py - closestY) * (py - closestY));
 }
 
 // ============================================================================
@@ -316,6 +445,36 @@ function onHandsResults(results) {
             // 檢查邊緣穿越
             if (gameState === 'playing') {
                 checkEdgeCrossing({ x, y });
+
+                // 檢查紅線碰撞
+                if (currentShape && redLineCollisionCooldown <= 0) {
+                    const collisions = currentShape.checkPointEdgeCollision({ x, y }, 25);
+
+                    // 尋找是否碰撞到紅線
+                    const redLineCollision = collisions.find(c => !c.edgeProperty.cuttable);
+
+                    if (redLineCollision) {
+                        console.log('💥 碰撞紅線！', redLineCollision);
+
+                        // 播放音效
+                        if (collisionSound) {
+                            collisionSound();
+                        }
+
+                        // 創建火花
+                        for (let i = 0; i < 10; i++) {
+                            sparks.push(new Spark(x, y));
+                        }
+
+                        // 設置冷卻時間（500ms）
+                        redLineCollisionCooldown = 30; // 約 500ms (assuming 60fps)
+                    }
+                }
+            }
+
+            // 減少碰撞冷卻
+            if (redLineCollisionCooldown > 0) {
+                redLineCollisionCooldown--;
             }
 
             // 記錄軌跡（舊的滑動手勢）
@@ -363,26 +522,86 @@ function detectSwipe() {
 // 遊戲邏輯
 // ============================================================================
 
+// 創建五角星
+function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
+    const vertices = [];
+    const points = 5;
+
+    for (let i = 0; i < points * 2; i++) {
+        const angle = (i * Math.PI) / points - Math.PI / 2; // 從頂部開始
+        const radius = i % 2 === 0 ? outerRadius : innerRadius;
+        vertices.push({
+            x: centerX + Math.cos(angle) * radius,
+            y: centerY + Math.sin(angle) * radius
+        });
+    }
+
+    // 創建邊緣屬性（根據上傳的圖片，標記兩條紅線）
+    // 邊緣索引對應頂點 i 到 i+1
+    const edgeProperties = vertices.map((_, i) => {
+        // 根據圖片：上方水平段（頂點1->2）和下方對角段（頂點7->8）
+        const isRedLine = (i === 1) || (i === 7);
+        return {
+            color: isRedLine ? '#FF0000' : '#000000',
+            cuttable: !isRedLine
+        };
+    });
+
+    return new Polygon(vertices, edgeProperties);
+}
+
+// 創建音效
+function initAudio() {
+    // 使用 Web Audio API 創建簡單的碰撞音效
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    collisionSound = () => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.frequency.value = 400; // "噹"聲的頻率
+        oscillator.type = 'sine';
+
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.3);
+    };
+}
+
 // 初始化遊戲
 function initGame() {
-    // 創建正方形 - 調整大小以匹配用戶要求
-    const size = Math.min(canvas.width, canvas.height) * 0.55; // 從 0.4 增加到 0.55
+    const size = Math.min(canvas.width, canvas.height) * 0.55;
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
-    currentShape = new Polygon([
-        { x: cx - size / 2, y: cy - size / 2 },
-        { x: cx + size / 2, y: cy - size / 2 },
-        { x: cx + size / 2, y: cy + size / 2 },
-        { x: cx - size / 2, y: cy + size / 2 }
-    ]);
+    if (currentLevel === 1) {
+        // 關卡 1: 正方形
+        currentShape = new Polygon([
+            { x: cx - size / 2, y: cy - size / 2 },
+            { x: cx + size / 2, y: cy - size / 2 },
+            { x: cx + size / 2, y: cy + size / 2 },
+            { x: cx - size / 2, y: cy + size / 2 }
+        ]);
+    } else if (currentLevel === 2) {
+        // 關卡 2: 五角星（有紅線）
+        const outerRadius = size / 2;
+        const innerRadius = outerRadius * 0.38; // 標準五角星比例
+        currentShape = createStarPolygon(cx, cy, outerRadius, innerRadius);
+    }
 
     // 初始化原始面積
     window.initialArea = currentShape.getArea();
-    console.log('🎮 遊戲初始化！原始面積:', window.initialArea);
+    console.log(`🎮 遊戲初始化！關卡 ${currentLevel}，原始面積:`, window.initialArea);
 
     targetPercent = 10;
     gameState = 'playing';
+    fallingPieces = [];
+    sparks = [];
     updateUI();
 }
 
@@ -498,8 +717,19 @@ function checkWinCondition() {
 
     const currentPercent = (currentShape.getArea() / window.initialArea) * 100;
     if (currentPercent <= targetPercent) {
-        gameState = 'won';
-        showMessage('🎉 你贏了！');
+        if (currentLevel === 1) {
+            // 進入第二關
+            currentLevel = 2;
+            showMessage('🎉 第一關完成！進入五角星關卡...');
+
+            setTimeout(() => {
+                initGame();
+            }, 2000);
+        } else {
+            // 已完成所有關卡
+            gameState = 'won';
+            showMessage('🎊 恭喜！通關所有關卡！');
+        }
     }
 }
 
@@ -559,6 +789,12 @@ function updateUI() {
 
     document.getElementById('currentPercent').textContent = currentPercent.toFixed(1) + '%';
     document.getElementById('targetPercent').textContent = targetPercent + '%';
+
+    // 更新關卡顯示
+    const levelDisplay = document.getElementById('levelDisplay');
+    if (levelDisplay) {
+        levelDisplay.textContent = `關卡 ${currentLevel}`;
+    }
 }
 
 // 顯示訊息
@@ -581,7 +817,8 @@ function gameLoop() {
 
     // 繪製圖形
     if (currentShape && gameState === 'playing') {
-        currentShape.draw('#FF6B35', 4, '#000000'); // 橙色，黑色邊框
+        const shapeColor = currentLevel === 1 ? '#4ECDC4' : '#FF6B35'; // 青色正方形，橙色五角星
+        currentShape.draw(shapeColor, 4, '#000000');
     }
 
     // 更新並繪製掉落的碎片
@@ -589,6 +826,13 @@ function gameLoop() {
         piece.update();
         piece.draw();
         return !piece.isOffScreen();
+    });
+
+    // 更新並繪製火花
+    sparks = sparks.filter(spark => {
+        spark.update();
+        spark.draw();
+        return !spark.isDead();
     });
 
     // 繪製進入點指示器
@@ -658,9 +902,12 @@ function gameLoop() {
 // 啟動遊戲
 // ============================================================================
 document.getElementById('startButton').addEventListener('click', async () => {
-    console.log("Game Version: v1.6");
+    console.log("Game Version: v1.7");
     try {
         document.getElementById('startScreen').classList.add('hidden');
+
+        // 初始化音效
+        initAudio();
 
         // 設置 MediaPipe
         setupMediaPipe();
