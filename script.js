@@ -504,7 +504,6 @@ function checkWinCondition() {
 }
 
 // 執行切割（保留舊的滑動手勢功能）
-const initialArea = 0;
 function performSlice(start, end) {
     if (!currentShape || gameState !== 'playing') return;
 
@@ -515,24 +514,48 @@ function performSlice(start, end) {
     const area1 = poly1.getArea();
     const area2 = poly2.getArea();
 
-    // 保留較大的部分
-    currentShape = area1 > area2 ? poly1 : poly2;
+    console.log('✂️ 滑動手勢切割！面積:', { area1: Math.round(area1), area2: Math.round(area2) });
 
-    // 計算當前面積百分比
-    const originalArea = initialArea || currentShape.getArea();
-    if (!initialArea) {
-        window.initialArea = originalArea;
+    // 確定哪個是較大的部分
+    let keepPoly, discardPoly;
+    if (area1 > area2) {
+        keepPoly = poly1;
+        discardPoly = poly2;
+    } else {
+        keepPoly = poly2;
+        discardPoly = poly1;
     }
 
+    // 保留較大的部分
+    currentShape = keepPoly;
+
+    // 添加較小的部分到掉落動畫
+    fallingPieces.push(new FallingPiece(discardPoly));
+
+    // 立即更新UI
     updateUI();
+
+    console.log('📊 滑動切割後面積:', Math.round(currentShape.getArea()), '原始面積:', Math.round(window.initialArea), '百分比:', ((currentShape.getArea() / window.initialArea) * 100).toFixed(1) + '%');
+
     checkWinCondition();
 }
 
 // 更新 UI
 function updateUI() {
-    if (!currentShape || !window.initialArea) return;
+    if (!currentShape) {
+        console.warn('⚠️ updateUI: currentShape 不存在');
+        return;
+    }
 
-    const currentPercent = (currentShape.getArea() / window.initialArea) * 100;
+    if (!window.initialArea) {
+        console.warn('⚠️ updateUI: window.initialArea 不存在');
+        return;
+    }
+
+    const currentArea = currentShape.getArea();
+    const currentPercent = (currentArea / window.initialArea) * 100;
+
+    console.log('🔄 更新UI - 當前面積:', Math.round(currentArea), '原始面積:', Math.round(window.initialArea), '百分比:', currentPercent.toFixed(1) + '%');
 
     document.getElementById('currentPercent').textContent = currentPercent.toFixed(1) + '%';
     document.getElementById('targetPercent').textContent = targetPercent + '%';
@@ -558,7 +581,7 @@ function gameLoop() {
 
     // 繪製圖形
     if (currentShape && gameState === 'playing') {
-        currentShape.draw('#FFFFFF', 4, '#000000'); // 改為白色，黑色邊框
+        currentShape.draw('#4ECDC4', 4, '#000000'); // 淺藍色，黑色邊框
     }
 
     // 更新並繪製掉落的碎片
@@ -635,7 +658,7 @@ function gameLoop() {
 // 啟動遊戲
 // ============================================================================
 document.getElementById('startButton').addEventListener('click', async () => {
-    console.log("Game Version: v1.3 (Fixed Stretching & Colors)");
+    console.log("Game Version: v1.4 (Fixed Percentage Calculation)");
     try {
         document.getElementById('startScreen').classList.add('hidden');
 
