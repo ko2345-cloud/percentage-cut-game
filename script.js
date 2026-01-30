@@ -720,7 +720,7 @@ function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
     return new Polygon(vertices, edgeProperties);
 }
 
-/ 創建關卡 3 的十字架形狀 (v2.2)
+// 創建關卡 3 的十字架形狀 (v2.2)
 function createLevel3Shape(centerX, centerY, size) {
     const scale = size / 180;
     const vertices = [
