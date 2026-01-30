@@ -9,7 +9,8 @@ let hands;
 let camera;
 let gameState = 'idle'; // idle, playing, won, lost
 let currentShape = null;
-let currentLevel = 1; // 1 = square, 2 = star
+let currentLevel = 1; // 1 = square, 2 = star, 3 = organic shape
+let selectedLevel = 1; // User's level selection
 let targetPercent = 10;
 let swipeStart = null;
 let swipeEnd = null;
@@ -32,6 +33,10 @@ let sparks = [];
 
 // 碰撞音效
 let collisionSound = null;
+let explosionSound = null;
+
+// 炸彈
+let bombs = [];
 
 // ============================================================================
 // 初始化畫布尺寸
@@ -334,6 +339,124 @@ class FallingPiece {
 }
 
 // ============================================================================
+// 炸彈類別
+// ============================================================================
+class Bomb {
+    constructor(x, y, vx, vy, speed = 2) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.speed = speed;
+        this.radius = 12;
+        this.fuseTime = 0; // 用於動畫效果
+    }
+
+    update() {
+        // 移動炸彈
+        this.x += this.vx * this.speed;
+        this.y += this.vy * this.speed;
+        this.fuseTime += 0.1;
+    }
+
+    checkEdgeCollision(polygon) {
+        if (!polygon) return null;
+
+        const n = polygon.vertices.length;
+        for (let i = 0; i < n; i++) {
+            const j = (i + 1) % n;
+            const v1 = polygon.vertices[i];
+            const v2 = polygon.vertices[j];
+
+            // 計算炸彈到邊緣的距離
+            const distance = pointToSegmentDistance({ x: this.x, y: this.y }, v1, v2);
+
+            if (distance < this.radius + 2) {
+                // 碰撞！計算反彈
+                return {
+                    edgeIndex: i,
+                    v1: v1,
+                    v2: v2
+                };
+            }
+        }
+        return null;
+    }
+
+    bounce(edge) {
+        const { v1, v2 } = edge;
+
+        // 計算邊緣向量
+        const edgeVx = v2.x - v1.x;
+        const edgeVy = v2.y - v1.y;
+        const edgeLength = Math.sqrt(edgeVx * edgeVx + edgeVy * edgeVy);
+
+        // 標準化邊緣向量
+        const edgeNormX = edgeVx / edgeLength;
+        const edgeNormY = edgeVy / edgeLength;
+
+        // 計算法向量（垂直於邊緣）
+        const normalX = -edgeNormY;
+        const normalY = edgeNormX;
+
+        // 計算速度向量與法向量的點積
+        const dotProduct = this.vx * normalX + this.vy * normalY;
+
+        // 反射向量公式: V' = V - 2(V·N)N
+        this.vx = this.vx - 2 * dotProduct * normalX;
+        this.vy = this.vy - 2 * dotProduct * normalY;
+
+        // 微調位置，防止卡在邊緣
+        this.x += normalX * 3;
+        this.y += normalY * 3;
+    }
+
+    draw() {
+        // 繪製炸彈本體（深灰色圓球）
+        const gradient = ctx.createRadialGradient(
+            this.x - 4, this.y - 4, 2,
+            this.x, this.y, this.radius
+        );
+        gradient.addColorStop(0, '#555555');
+        gradient.addColorStop(1, '#222222');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 繪製炸彈高光
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.arc(this.x - 3, this.y - 3, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 繪製引信（閃爍效果）
+        const fuseFlicker = Math.sin(this.fuseTime * 10) * 0.5 + 0.5;
+        ctx.fillStyle = `rgba(255, 140, 0, ${0.5 + fuseFlicker * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - this.radius - 3, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 火花效果
+        if (fuseFlicker > 0.7) {
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y - this.radius - 3, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // 檢查炸彈是否與切割線相交
+    checkCutLineCollision(lineStart, lineEnd) {
+        // 計算點到線段的距離
+        const distance = pointToSegmentDistance({ x: this.x, y: this.y }, lineStart, lineEnd);
+        return distance < this.radius + 5; // 增加一點容差
+    }
+}
+
+
+// ============================================================================
 // 數學工具函數
 // ============================================================================
 
@@ -580,6 +703,67 @@ function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
     return new Polygon(vertices, edgeProperties);
 }
 
+// 創建關卡 3 的有機形狀 (基於上傳圖片)
+function createLevel3Shape(centerX, centerY, size) {
+    // 創建不規則的有機形狀，類似人體輪廓
+    const scale = size / 400;
+    const vertices = [
+        // 左上肢
+        { x: centerX - 180 * scale, y: centerY - 150 * scale },
+        { x: centerX - 200 * scale, y: centerY - 100 * scale },
+        { x: centerX - 190 * scale, y: centerY - 50 * scale },
+        { x: centerX - 150 * scale, y: centerY - 20 * scale },
+
+        // 頭部區域（紅色圓圈）
+        { x: centerX - 100 * scale, y: centerY - 180 * scale },
+        { x: centerX - 50 * scale, y: centerY - 200 * scale },
+        { x: centerX, y: centerY - 210 * scale },
+        { x: centerX + 50 * scale, y: centerY - 200 * scale },
+        { x: centerX + 100 * scale, y: centerY - 180 * scale },
+
+        // 右上肢
+        { x: centerX + 150 * scale, y: centerY - 20 * scale },
+        { x: centerX + 190 * scale, y: centerY - 50 * scale },
+        { x: centerX + 200 * scale, y: centerY - 100 * scale },
+        { x: centerX + 180 * scale, y: centerY - 150 * scale },
+
+        // 右側身體
+        { x: centerX + 160 * scale, y: centerY },
+        { x: centerX + 140 * scale, y: centerY + 50 * scale },
+
+        // 右下肢部
+        { x: centerX + 120 * scale, y: centerY + 100 * scale },
+        { x: centerX + 100 * scale, y: centerY + 150 * scale },
+        { x: centerX + 80 * scale, y: centerY + 180 * scale },
+        { x: centerX + 50 * scale, y: centerY + 200 * scale },
+
+        // 下方中心
+        { x: centerX, y: centerY + 210 * scale },
+
+        // 左下肢部
+        { x: centerX - 50 * scale, y: centerY + 200 * scale },
+        { x: centerX - 80 * scale, y: centerY + 180 * scale },
+        { x: centerX - 100 * scale, y: centerY + 150 * scale },
+        { x: centerX - 120 * scale, y: centerY + 100 * scale },
+
+        // 左側身體
+        { x: centerX - 140 * scale, y: centerY + 50 * scale },
+        { x: centerX - 160 * scale, y: centerY }
+    ];
+
+    // 設置紅線區域（頭部圓圈區域，邊緣 4-8）
+    const edgeProperties = vertices.map((_, i) => {
+        const isRedLine = (i >= 4 && i <= 8);
+        return {
+            color: isRedLine ? '#FF0000' : '#000000',
+            cuttable: !isRedLine
+        };
+    });
+
+    return new Polygon(vertices, edgeProperties);
+}
+
+
 // 創建音效
 function initAudio() {
     // 使用 Web Audio API 創建簡單的碰撞音效
@@ -601,7 +785,41 @@ function initAudio() {
         oscillator.start(audioContext.currentTime);
         oscillator.stop(audioContext.currentTime + 0.3);
     };
+
+    // 爆炸音效 "BOOM"
+    explosionSound = () => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        const oscillator2 = audioContext.createOscillator();
+        const gainNode2 = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        oscillator2.connect(gainNode2);
+        gainNode.connect(audioContext.destination);
+        gainNode2.connect(audioContext.destination);
+
+        // 低頻爆炸聲
+        oscillator.frequency.value = 50;
+        oscillator.type = 'sawtooth';
+
+        // 高頻爆炸聲
+        oscillator2.frequency.value = 150;
+        oscillator2.type = 'square';
+
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+        gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+
+        oscillator2.start(audioContext.currentTime);
+        oscillator2.stop(audioContext.currentTime + 0.3);
+    };
 }
+
 
 // 初始化遊戲
 function initGame() {
@@ -622,6 +840,9 @@ function initGame() {
         const outerRadius = size / 2;
         const innerRadius = outerRadius * 0.38; // 標準五角星比例
         currentShape = createStarPolygon(cx, cy, outerRadius, innerRadius);
+    } else if (currentLevel === 3) {
+        // 關卡 3: 有機形狀（有紅線）
+        currentShape = createLevel3Shape(cx, cy, size);
     }
 
     // 初始化原始面積
@@ -632,8 +853,41 @@ function initGame() {
     gameState = 'playing';
     fallingPieces = [];
     sparks = [];
+
+    // 生成炸彈
+    bombs = [];
+    spawnBomb();
+
     updateUI();
 }
+
+// 生成炸彈
+function spawnBomb() {
+    if (!currentShape) return;
+
+    // 計算形狀的中心點
+    let centerX = 0, centerY = 0;
+    currentShape.vertices.forEach(v => {
+        centerX += v.x;
+        centerY += v.y;
+    });
+    centerX /= currentShape.vertices.length;
+    centerY /= currentShape.vertices.length;
+
+    // 隨機方向
+    const angle = Math.random() * Math.PI * 2;
+    const vx = Math.cos(angle);
+    const vy = Math.sin(angle);
+
+    // 根據關卡調整炸彈速度
+    let speed = 1.5;
+    if (currentLevel === 2) speed = 2.0;
+    if (currentLevel === 3) speed = 2.5;
+
+    bombs.push(new Bomb(centerX, centerY, vx, vy, speed));
+    console.log(`💣 炸彈已生成！速度: ${speed}`);
+}
+
 
 // 檢查邊緣穿越並執行切割
 function checkEdgeCrossing(point) {
@@ -705,6 +959,15 @@ function performEdgeBasedCut(entryPoint, exitPoint) {
 
     console.log('🔪 開始切割...', { entry: entryPoint, exit: exitPoint });
 
+    // 檢查切割線是否碰到炸彈
+    for (let bomb of bombs) {
+        if (bomb.checkCutLineCollision(entryPoint, exitPoint)) {
+            console.log('💥 切割線碰到炸彈！');
+            triggerExplosion(bomb.x, bomb.y);
+            return; // 遊戲失敗，不執行切割
+        }
+    }
+
     // 檢查切割線是否穿過紅線（不可切割的邊緣）
     if (currentShape.checkCutThroughUncuttableEdge(entryPoint, exitPoint)) {
         console.log('❌ 切割被紅線阻擋！');
@@ -748,6 +1011,41 @@ function performEdgeBasedCut(entryPoint, exitPoint) {
     checkWinCondition();
 }
 
+// 觸發爆炸
+function triggerExplosion(x, y) {
+    console.log('💥💥💥 爆炸！遊戲失敗！');
+
+    // 播放爆炸音效
+    if (explosionSound) {
+        explosionSound();
+    }
+
+    // 創建大量火花
+    for (let i = 0; i < 50; i++) {
+        sparks.push(new Spark(x, y));
+    }
+
+    // 創建閃光效果
+    const flash = document.createElement('div');
+    flash.className = 'explosion-flash';
+    document.querySelector('.game-container').appendChild(flash);
+
+    // 移除閃光效果
+    setTimeout(() => {
+        flash.remove();
+    }, 500);
+
+    // 設置遊戲失敗
+    gameState = 'lost';
+    showMessage('💥 炸彈爆炸！遊戲失敗！');
+
+    // 3秒後重新開始當前關卡
+    setTimeout(() => {
+        initGame();
+    }, 3000);
+}
+
+
 // 檢查勝利條件
 function checkWinCondition() {
     if (!currentShape || !window.initialArea) return;
@@ -758,6 +1056,14 @@ function checkWinCondition() {
             // 進入第二關
             currentLevel = 2;
             showMessage('🎉 第一關完成！進入五角星關卡...');
+
+            setTimeout(() => {
+                initGame();
+            }, 2000);
+        } else if (currentLevel === 2) {
+            // 進入第三關
+            currentLevel = 3;
+            showMessage('🎉 第二關完成！進入最終關卡...');
 
             setTimeout(() => {
                 initGame();
@@ -861,8 +1167,27 @@ function gameLoop() {
 
     // 繪製圖形
     if (currentShape && gameState === 'playing') {
-        const shapeColor = currentLevel === 1 ? '#4ECDC4' : '#FF6B35'; // 青色正方形，橙色五角星
+        // 新的顏色方案
+        let shapeColor = '#9D4EDD'; // 紫色 - Level 1
+        if (currentLevel === 2) shapeColor = '#06FFA5'; // 青綠色 - Level 2  
+        if (currentLevel === 3) shapeColor = '#FFB627'; // 金黃色 - Level 3
+
         currentShape.draw(shapeColor, 4, '#000000');
+    }
+
+    // 更新並繪製炸彈
+    if (gameState === 'playing') {
+        bombs.forEach(bomb => {
+            bomb.update();
+
+            // 檢查炸彈是否碰到邊緣
+            const collision = bomb.checkEdgeCollision(currentShape);
+            if (collision) {
+                bomb.bounce(collision);
+            }
+
+            bomb.draw();
+        });
     }
 
     // 更新並繪製掉落的碎片
@@ -945,10 +1270,33 @@ function gameLoop() {
 // ============================================================================
 // 啟動遊戲
 // ============================================================================
+
+// 關卡選擇按鈕
+document.querySelectorAll('.level-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+        // 移除其他按鈕的選中狀態
+        document.querySelectorAll('.level-btn').forEach(b => b.classList.remove('selected'));
+
+        // 添加當前按鈕的選中狀態
+        this.classList.add('selected');
+
+        // 設置選擇的關卡
+        selectedLevel = parseInt(this.dataset.level);
+        console.log(`已選擇關卡 ${selectedLevel}`);
+    });
+});
+
+// 默認選中關卡 1
+document.querySelector('.level-btn[data-level="1"]').classList.add('selected');
+
 document.getElementById('startButton').addEventListener('click', async () => {
-    console.log("Game Version: v1.8");
+    console.log("Game Version: v1.9");
     try {
         document.getElementById('startScreen').classList.add('hidden');
+
+        // 使用選擇的關卡
+        currentLevel = selectedLevel;
+        console.log(`開始遊戲，當前關卡: ${currentLevel}`);
 
         // 初始化音效
         initAudio();
