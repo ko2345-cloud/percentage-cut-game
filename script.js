@@ -720,10 +720,9 @@ function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
     return new Polygon(vertices, edgeProperties);
 }
 
-// 創建關卡 3 的有機形狀 (基於上傳圖片)
-// 創建關卡 3 的跑步人形 (基於上傳圖片2)
+// 創建關卡1 3 的跑步人形 (基於用戶上傳圓片 v2.1)
 function createLevel3Shape(centerX, centerY, size) {
-    const scale = size / 300;
+    const scale = size / 280;
     const vertices = [
         // === 左手 (10個頂點) ===
         { x: centerX - 140 * scale, y: centerY - 105 * scale },
@@ -1294,9 +1293,9 @@ function gameLoop() {
     // 繪製圖形
     if (currentShape && gameState === 'playing') {
         // 新的顏色方案
-        let shapeColor = '#9D4EDD'; // 紫色 - Level 1
-        if (currentLevel === 2) shapeColor = '#06FFA5'; // 青綠色 - Level 2  
-        if (currentLevel === 3) shapeColor = '#FFB627'; // 金黃色 - Level 3
+        let shapeColor = '#3B82F6'; // 藍色 - Level 1
+        if (currentLevel === 2) shapeColor = '#EC4899'; // 粉紅色 - Level 2
+        if (currentLevel === 3) shapeColor = '#F97316'; // 橙色 - Level 3
 
         currentShape.draw(shapeColor, 4, '#000000');
     }
