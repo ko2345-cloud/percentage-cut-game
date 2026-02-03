@@ -1,5 +1,109 @@
 // ============================================================================
-// 全局變量和常量
+// Game: Percentage Cut - v3.13
+// Description: Use hand gestures to cut shapes to target percentages
+// ============================================================================
+
+// ============================================================================
+// Translations - Bilingual Support (Chinese/English)
+// ============================================================================
+const translations = {
+    zh: {
+        gameTitle: "切割遊戲 - Percentage Cut",
+        gameInstructions: "用單手切割圖案，將面積減少到指定比例",
+        level: "關卡",
+        target: "目標",
+        currentArea: "目前面積",
+        timeRemaining: "剩餘時間",
+        selectLevel: "選擇關卡：",
+        level1: "關卡 1",
+        level2: "關卡 2",
+        level3: "關卡 3",
+        level4: "關卡 4",
+        startGame: "開始遊戲",
+        hand1: "手1",
+        placeHand: "請將一隻手放在鏡頭前",
+        redLineBlock: "紅線阻擋切割",
+        bombExplosion: "炸彈爆炸！遊戲失敗",
+        timeUp: "時間到！遊戲失敗",
+        areaTooSmall: "面積太小！低於{percent}%！遊戲失敗",
+        levelComplete1: "第一關完成！進入五角星...",
+        levelComplete2: "第二關完成！進入十字形狀...",
+        levelComplete3: "第三關完成！進入最終挑戰計時戰...",
+        gameComplete: "完成！面積在 {min}%-{max}% 範圍內！通關成功！",
+        cameraError: "無法訪問攝像頭。請允許權限",
+
+        // Two-player mode translations
+        wins: "Win",
+        selectMode: "選擇模式：",
+        singlePlayer: "單人模式",
+        twoPlayers: "雙人模式",
+        player1Wins: "玩家1 獲勝！",
+        player2Wins: "玩家2 獲勝！",
+        draw: "平手！",
+        gameOver: "遊戲結束",
+        finalScore: "最終分數"
+    },
+    en: {
+        gameTitle: "Percentage Cut",
+        gameInstructions: "Use one hand to cut the shape to the target percentage!",
+        level: "Level",
+        target: "Target",
+        currentArea: "Area",
+        timeRemaining: "Time",
+        selectLevel: "Select Level:",
+        level1: "Level 1",
+        level2: "Level 2",
+        level3: "Level 3",
+        level4: "Level 4",
+        startGame: "Start Game",
+        hand1: "Hand 1",
+        placeHand: "Please place one hand in front of camera",
+        redLineBlock: "Red line blocked!",
+        bombExplosion: "Bomb exploded! Game Over!",
+        timeUp: "Time's up! Game Over!",
+        areaTooSmall: "Area too small! Below {percent}%! Game Over!",
+        levelComplete1: "Level 1 Complete! Next: Star Shape...",
+        levelComplete2: "Level 2 Complete! Next: Cross Shape...",
+        levelComplete3: "Level 3 Complete! Next: Final Challenge...",
+        gameComplete: "Perfect! Area between {min}%-{max}%! All Levels Cleared!",
+        cameraError: "Camera access denied. Please allow permission.",
+
+        // Two-player mode translations
+        wins: "Win",
+        selectMode: "Select Mode:",
+        singlePlayer: "Single Player",
+        twoPlayers: "Two Players",
+        player1Wins: "Player 1 Wins!",
+        player2Wins: "Player 2 Wins!",
+        draw: "Draw!",
+        gameOver: "Game Over",
+        finalScore: "Final Score"
+    }
+};
+
+let currentLanguage = 'zh';
+
+function t(key, params = {}) {
+    let text = translations[currentLanguage][key] || key;
+    for (const [k, v] of Object.entries(params)) {
+        text = text.replace(`{${k}}`, v);
+    }
+    return text;
+}
+
+function updateLanguage(lang) {
+    currentLanguage = lang;
+    document.documentElement.lang = lang === 'zh' ? 'zh-TW' : 'en';
+
+    // Update DOM elements
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
+    });
+}
+
+// ============================================================================
+// Canvas and Game State Variables
 // ============================================================================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -7,56 +111,108 @@ const video = document.getElementById('webcam');
 
 let hands;
 let camera;
-let gameState = 'idle'; // idle, playing, won, lost
-let currentShape = null;
+let gameState = 'idle'; // idle, playing, won, lost, finished_level
+let gameMode = 'single'; // 'single' or 'multi'
+let players = []; // Array of PlayerState
+
 let currentLevel = 1; // 1 = square, 2 = star, 3 = cross, 4 = circle
 let selectedLevel = 1; // User's level selection
 let targetPercent = 10;
-let minTargetPercent = 10; // 關卡4的最小目標
-let maxTargetPercent = 20; // 關卡4的最大目標
-let swipeStart = null;
-let swipeEnd = null;
-let tracking = false;
-let redLineCollisionCooldown = 0; // 防止重複觸發碰撞
+let minTargetPercent = 10; // Level 4 min target
+let maxTargetPercent = 20; // Level 4 max target
 
-// 計時器相關變數（關卡4）
-let gameTimer = null; // 計時器ID
-let timeRemaining = 30; // 剩餘秒數
-let timerActive = false; // 計時器是否啟動
+// Timer variables
+let gameTimer = null;
+let timeRemaining = 60; // Default 60s (multi), 30s (single level 4)
+let timerActive = false;
 
-// 切割狀態追蹤
-let cuttingState = {
-    isInside: false,
-    entryPoint: null,
-    currentPath: [],
-    lastPosition: null
-};
+// Two-player WIN tracking
+let p1TotalWins = 0;
+let p2TotalWins = 0;
 
-// 掉落的圖形碎片
-let fallingPieces = [];
-
-// 火花粒子
-let sparks = [];
-
-// 碰撞音效
+// Sound effects (placeholders)
 let collisionSound = null;
 let explosionSound = null;
 
-// 炸彈
-let bombs = [];
+// ============================================================================
+// PlayerState Class - Manages individual player state
+// ============================================================================
+class PlayerState {
+    constructor(id, viewport) {
+        this.id = id;
+        this.viewport = viewport;
+
+        // Anti-jitter smoothing
+        this.smoothCursor = null;
+
+        this.shape = null;
+        this.fallingPieces = [];
+        this.sparks = [];
+        this.bombs = [];
+
+        this.cuttingState = {
+            isInside: false,
+            entryPoint: null,
+            currentPath: [],
+            lastPosition: null
+        };
+
+        this.gestureTrail = [];
+        this.initialArea = 0;
+
+        // Two-player stats
+        this.wins = 0;
+        this.completed = false;
+        this.completionTime = 0;
+        this.finalPercent = 100;
+    }
+
+    reset() {
+        this.shape = null;
+        this.fallingPieces = [];
+        this.sparks = [];
+        this.bombs = [];
+        this.cuttingState = {
+            isInside: false,
+            entryPoint: null,
+            currentPath: [],
+            lastPosition: null
+        };
+        this.gestureTrail = [];
+        this.completed = false;
+        this.completionTime = 0;
+        this.wins = 0;
+    }
+}
 
 // ============================================================================
-// 初始化畫布尺寸
+// Canvas Resizing
 // ============================================================================
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+
+    // Update player viewports
+    if (players.length > 0) {
+        if (gameMode === 'multi' && players.length > 1) {
+            const halfWidth = canvas.width / 2;
+            players[0].viewport = { x: 0, y: 0, width: halfWidth, height: canvas.height };
+            players[1].viewport = { x: halfWidth, y: 0, width: halfWidth, height: canvas.height };
+        } else {
+            players[0].viewport = { x: 0, y: 0, width: canvas.width, height: canvas.height };
+        }
+    }
 }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
+
 // ============================================================================
-// Polygon 類別 - 表示多邊形
+// Part 2: Polygon Class and Mathematical Utilities
+// ============================================================================
+
+// ============================================================================
+// Polygon Class - Represents multi-sided shapes
 // ============================================================================
 class Polygon {
     constructor(vertices, edgeProperties = null) {
@@ -69,7 +225,7 @@ class Polygon {
         }));
     }
 
-    // 計算多邊形面積（使用鞋帶公式）
+    // Calculate polygon area using shoelace formula
     getArea() {
         let area = 0;
         const n = this.vertices.length;
@@ -81,11 +237,11 @@ class Polygon {
         return Math.abs(area / 2);
     }
 
-    // 繪製多邊形
+    // Draw the polygon
     draw(color = '#4ECDC4', lineWidth = 4, strokeColor = '#000000') {
         if (this.vertices.length < 3) return;
 
-        // 填充
+        // Fill
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.moveTo(this.vertices[0].x, this.vertices[0].y);
@@ -95,7 +251,7 @@ class Polygon {
         ctx.closePath();
         ctx.fill();
 
-        // 繪製邊緣（每條邊可能有不同顏色）
+        // Draw edges (each edge may have different color)
         ctx.lineWidth = lineWidth;
         ctx.lineJoin = 'round';
 
@@ -112,7 +268,7 @@ class Polygon {
         }
     }
 
-    // 檢查點是否在多邊形內（射線投射算法）
+    // Check if point is inside polygon (ray casting algorithm)
     isPointInside(point) {
         let inside = false;
         for (let i = 0, j = this.vertices.length - 1; i < this.vertices.length; j = i++) {
@@ -126,7 +282,7 @@ class Polygon {
         return inside;
     }
 
-    // 檢查點是否碰撞到任何邊緣
+    // Check if point collides with any edge
     checkPointEdgeCollision(point, threshold = 20) {
         const n = this.vertices.length;
         const collisions = [];
@@ -136,7 +292,7 @@ class Polygon {
             const v1 = this.vertices[i];
             const v2 = this.vertices[j];
 
-            // 計算點到線段的距離
+            // Calculate distance from point to line segment
             const distance = pointToSegmentDistance(point, v1, v2);
 
             if (distance < threshold) {
@@ -151,35 +307,35 @@ class Polygon {
         return collisions;
     }
 
-    // 檢查切割線是否穿過不可切割的邊緣（紅線）
+    // Check if cut line passes through uncuttable edge (red line)
     checkCutThroughUncuttableEdge(lineStart, lineEnd) {
         const n = this.vertices.length;
 
         for (let i = 0; i < n; i++) {
             const j = (i + 1) % n;
 
-            // 如果這條邊不可切割
+            // If edge is uncuttable
             if (!this.edgeProperties[i].cuttable) {
                 const v1 = this.vertices[i];
                 const v2 = this.vertices[j];
 
-                // 檢查切割線是否與這條紅線相交
+                // Check if cut line intersects with red line
                 const intersection = getLineIntersection(lineStart, lineEnd, v1, v2);
 
                 if (intersection) {
-                    console.log('🚫 切割線穿過紅線！', {
+                    console.log('[CUT BLOCKED] Cut line crosses red line', {
                         edgeIndex: i,
                         intersection: intersection
                     });
-                    return true; // 找到交點，表示穿過紅線
+                    return true; // Found intersection, cut blocked
                 }
             }
         }
 
-        return false; // 沒有穿過任何紅線
+        return false; // No red line violations
     }
 
-    // 找到從外部點到內部點穿過邊緣的交點
+    // Find edge intersection point from outside to inside
     findEdgeIntersection(outsidePoint, insidePoint) {
         const n = this.vertices.length;
         for (let i = 0; i < n; i++) {
@@ -195,12 +351,12 @@ class Polygon {
         return null;
     }
 
-    // 用線段切割多邊形
+    // Slice polygon with a line segment
     slice(lineStart, lineEnd) {
         const intersections = [];
         const n = this.vertices.length;
 
-        // 找到所有與多邊形邊相交的點
+        // Find all intersections with polygon edges
         for (let i = 0; i < n; i++) {
             const j = (i + 1) % n;
             const intersection = getLineIntersection(
@@ -212,77 +368,182 @@ class Polygon {
             }
         }
 
-        // 需要恰好兩個交點才能切割
+        // Need exactly 2 intersection points to slice
         if (intersections.length !== 2) return null;
 
         const [int1, int2] = intersections;
-        const poly1 = [];
-        const poly2 = [];
+        const poly1Vertices = [];
+        const poly1Edges = [];
+        const poly2Vertices = [];
+        const poly2Edges = [];
 
-        // 構建第一個多邊形
+        // --- Build Polygon 1 ---
+        // Start from intersection 1
+        poly1Vertices.push({ x: int1.point.x, y: int1.point.y });
+
+        // Traverse vertices from int1.index + 1 to int2.index
         let idx = (int1.index + 1) % n;
-        poly1.push({ x: int1.point.x, y: int1.point.y }); // 深拷貝交點
+
+        // The first edge goes from int1 to vertices[idx]
+        // It inherits properties from edge[int1.index]
+        poly1Edges.push(this.edgeProperties[int1.index]);
 
         let safetyCounter = 0;
         while (idx !== (int2.index + 1) % n) {
-            // 深拷貝頂點防止引用共享
-            poly1.push({ x: this.vertices[idx].x, y: this.vertices[idx].y });
-            idx = (idx + 1) % n;
+            poly1Vertices.push({ x: this.vertices[idx].x, y: this.vertices[idx].y });
 
-            safetyCounter++;
-            if (safetyCounter > n + 10) {
-                console.error("無限循環檢測: Polygon 1 構建失敗");
-                return null;
+            // The edge starting from this vertex
+            // If the next vertex is the exit point, it's part of edge[int2.index]
+            // Otherwise it's a full original edge
+            if (idx === int2.index) {
+                // This edge goes to the exit point, so it's part of edge[int2.index]
+                poly1Edges.push(this.edgeProperties[idx]);
+            } else {
+                // Full original edge
+                poly1Edges.push(this.edgeProperties[idx]);
             }
-        }
-        poly1.push({ x: int2.point.x, y: int2.point.y }); // 深拷貝交點
 
-        // 構建第二個多邊形
+            idx = (idx + 1) % n;
+            safetyCounter++;
+            if (safetyCounter > n + 10) { console.error("Poly1 loop"); return null; }
+        }
+
+        poly1Vertices.push({ x: int2.point.x, y: int2.point.y });
+
+        // Closing edge: from int2 back to int1 (THE CUT LINE)
+        // This is a NEW edge, so it should be cuttable and black (default)
+        poly1Edges.push({ color: '#000000', cuttable: true });
+
+        // --- Build Polygon 2 ---
+        // Start from intersection 2
+        poly2Vertices.push({ x: int2.point.x, y: int2.point.y });
+
+        // Traverse vertices from int2.index + 1 to int1.index
         idx = (int2.index + 1) % n;
-        poly2.push({ x: int2.point.x, y: int2.point.y }); // 深拷貝交點
+
+        // Inheritance from edge[int2.index]
+        poly2Edges.push(this.edgeProperties[int2.index]);
 
         safetyCounter = 0;
         while (idx !== (int1.index + 1) % n) {
-            // 深拷貝頂點防止引用共享
-            poly2.push({ x: this.vertices[idx].x, y: this.vertices[idx].y });
-            idx = (idx + 1) % n;
+            poly2Vertices.push({ x: this.vertices[idx].x, y: this.vertices[idx].y });
 
-            safetyCounter++;
-            if (safetyCounter > n + 10) {
-                console.error("無限循環檢測: Polygon 2 構建失敗");
-                return null;
+            if (idx === int1.index) {
+                poly2Edges.push(this.edgeProperties[idx]);
+            } else {
+                poly2Edges.push(this.edgeProperties[idx]);
             }
-        }
-        poly2.push({ x: int1.point.x, y: int1.point.y }); // 深拷貝交點
 
-        return [new Polygon(poly1), new Polygon(poly2)];
+            idx = (idx + 1) % n;
+            safetyCounter++;
+            if (safetyCounter > n + 10) { console.error("Poly2 loop"); return null; }
+        }
+
+        poly2Vertices.push({ x: int1.point.x, y: int1.point.y });
+
+        // Closing edge: from int1 back to int2 (THE CUT LINE)
+        poly2Edges.push({ color: '#000000', cuttable: true });
+
+        return [
+            new Polygon(poly1Vertices, poly1Edges),
+            new Polygon(poly2Vertices, poly2Edges)
+        ];
     }
 }
 
 // ============================================================================
-// 數學工具函數
+// Mathematical Utility Functions
+// ============================================================================
+
+// Get intersection point of two line segments
+function getLineIntersection(p1, p2, p3, p4) {
+    const x1 = p1.x, y1 = p1.y;
+    const x2 = p2.x, y2 = p2.y;
+    const x3 = p3.x, y3 = p3.y;
+    const x4 = p4.x, y4 = p4.y;
+
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(denom) < 0.0001) return null;
+
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+        return {
+            x: x1 + t * (x2 - x1),
+            y: y1 + t * (y2 - y1)
+        };
+    }
+    return null;
+}
+
+// Calculate distance from point to line segment
+function pointToSegmentDistance(point, segStart, segEnd) {
+    const px = point.x;
+    const py = point.y;
+    const x1 = segStart.x;
+    const y1 = segStart.y;
+    const x2 = segEnd.x;
+    const y2 = segEnd.y;
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lengthSquared = dx * dx + dy * dy;
+
+    if (lengthSquared === 0) {
+        // Segment degenerates to a point
+        return Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+    }
+
+    // Calculate projection parameter t
+    let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+    t = Math.max(0, Math.min(1, t)); // Clamp to [0, 1]
+
+    // Closest point
+    const closestX = x1 + t * dx;
+    const closestY = y1 + t * dy;
+
+    return Math.sqrt((px - closestX) * (px - closestX) + (py - closestY) * (py - closestY));
+}
+
+function isPointInPolygon(p, vertices) {
+    let inside = false;
+    for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+        const xi = vertices[i].x, yi = vertices[i].y;
+        const xj = vertices[j].x, yj = vertices[j].y;
+
+        const intersect = ((yi > p.y) !== (yj > p.y)) &&
+            (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
+
+// ============================================================================
+// Part 3: Particle Effects (Sparks, Falling Pieces, Bombs)
 // ============================================================================
 
 // ============================================================================
-// 火花粒子類別
+// Spark Class - Particle effects
 // ============================================================================
 class Spark {
     constructor(x, y) {
         this.x = x;
         this.y = y;
 
-        // 隨機速度（向四周爆炸）
+        // Random velocity (explode outward)
         const angle = Math.random() * Math.PI * 2;
         const speed = 3 + Math.random() * 5;
         this.vx = Math.cos(angle) * speed;
         this.vy = Math.sin(angle) * speed;
 
         this.gravity = 0.3;
-        this.lifetime = 30 + Math.floor(Math.random() * 20); // 30-50 幀
+        this.lifetime = 30 + Math.floor(Math.random() * 20); // 30-50 frames
         this.age = 0;
         this.size = 3 + Math.random() * 3; // 3-6px
 
-        // 顏色：橙色到黃色
+        // Color: Orange to yellow
         const colors = ['#FFD700', '#FF6B35', '#FFA500', '#FF8C00'];
         this.color = colors[Math.floor(Math.random() * colors.length)];
     }
@@ -313,7 +574,7 @@ class Spark {
 }
 
 // ============================================================================
-// 掉落碎片類別
+// FallingPiece Class - Cut-off pieces that fall
 // ============================================================================
 class FallingPiece {
     constructor(polygon) {
@@ -321,12 +582,12 @@ class FallingPiece {
         this.velocity = 0;
         this.gravity = 0.5;
         this.opacity = 1;
-        this.rotation = (Math.random() - 0.5) * 0.05; // 輕微旋轉
+        this.rotation = (Math.random() - 0.5) * 0.05; // Slight rotation
     }
 
     update() {
         this.velocity += this.gravity;
-        // 移動所有頂點向下
+        // Move all vertices downward
         this.polygon.vertices.forEach(v => {
             v.y += this.velocity;
         });
@@ -336,7 +597,7 @@ class FallingPiece {
     draw() {
         ctx.save();
         ctx.globalAlpha = this.opacity;
-        this.polygon.draw('#FFD700', 4, '#000000'); // 黃色碎片，黑色邊框
+        this.polygon.draw('#FFD700', 4, '#000000'); // Yellow piece, black outline
         ctx.restore();
     }
 
@@ -346,7 +607,7 @@ class FallingPiece {
 }
 
 // ============================================================================
-// 炸彈類別
+// Bomb Class - Dangerous obstacles
 // ============================================================================
 class Bomb {
     constructor(x, y, vx, vy, speed = 2) {
@@ -356,24 +617,15 @@ class Bomb {
         this.vy = vy;
         this.speed = speed;
         this.radius = 12;
-        this.fuseTime = 0; // 用於動畫效果
+        this.fuseTime = 0; // For animation
     }
 
     update() {
-        // 計算下一個位置
-        const nextX = this.x + this.vx * this.speed;
-        const nextY = this.y + this.vy * this.speed;
+        // Direct movement
+        this.x += this.vx * this.speed;
+        this.y += this.vy * this.speed;
 
-        // 檢查下一個位置是否在圖案內
-        const nextPos = { x: nextX, y: nextY };
-        if (currentShape && currentShape.isPointInside(nextPos)) {
-            // 在內部，正常移動
-            this.x = nextX;
-            this.y = nextY;
-        }
-        // 如果不在內部，不移動，等待gameLoop中的碰撞檢測來反彈
-
-        // 更新引信動畫
+        // Update fuse animation
         this.fuseTime += 0.1;
     }
 
@@ -386,11 +638,11 @@ class Bomb {
             const v1 = polygon.vertices[i];
             const v2 = polygon.vertices[j];
 
-            // 計算炸彈到邊緣的距離
+            // Calculate distance from bomb center to edge
             const distance = pointToSegmentDistance({ x: this.x, y: this.y }, v1, v2);
 
             if (distance < this.radius + 2) {
-                // 碰撞！計算反彈
+                // Collision! Return edge info
                 return {
                     edgeIndex: i,
                     v1: v1,
@@ -404,33 +656,33 @@ class Bomb {
     bounce(edge) {
         const { v1, v2 } = edge;
 
-        // 計算邊緣向量
+        // Calculate edge direction
         const edgeVx = v2.x - v1.x;
         const edgeVy = v2.y - v1.y;
         const edgeLength = Math.sqrt(edgeVx * edgeVx + edgeVy * edgeVy);
 
-        // 標準化邊緣向量
+        // Normalize edge vector
         const edgeNormX = edgeVx / edgeLength;
         const edgeNormY = edgeVy / edgeLength;
 
-        // 計算法向量（垂直於邊緣）
+        // Calculate normal vector (perpendicular to edge)
         const normalX = -edgeNormY;
         const normalY = edgeNormX;
 
-        // 計算速度向量與法向量的點積
+        // Calculate velocity dot product with normal
         const dotProduct = this.vx * normalX + this.vy * normalY;
 
-        // 反射向量公式: V' = V - 2(V·N)N
+        // Reflection formula: V' = V - 2(V·N)N
         this.vx = this.vx - 2 * dotProduct * normalX;
         this.vy = this.vy - 2 * dotProduct * normalY;
 
-        // 微調位置，防止卡在邊緣
+        // Adjust position to prevent stuck inside edge
         this.x += normalX * 3;
         this.y += normalY * 3;
     }
 
     draw() {
-        // 繪製炸彈本體（深灰色圓球）
+        // Draw bomb (dark gray sphere)
         const gradient = ctx.createRadialGradient(
             this.x - 4, this.y - 4, 2,
             this.x, this.y, this.radius
@@ -443,20 +695,20 @@ class Bomb {
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fill();
 
-        // 繪製炸彈高光
+        // Draw highlight
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.beginPath();
         ctx.arc(this.x - 3, this.y - 3, 4, 0, Math.PI * 2);
         ctx.fill();
 
-        // 繪製引信（閃爍效果）
+        // Draw fuse (flickering)
         const fuseFlicker = Math.sin(this.fuseTime * 10) * 0.5 + 0.5;
         ctx.fillStyle = `rgba(255, 140, 0, ${0.5 + fuseFlicker * 0.5})`;
         ctx.beginPath();
         ctx.arc(this.x, this.y - this.radius - 3, 3, 0, Math.PI * 2);
         ctx.fill();
 
-        // 火花效果
+        // Spark effect
         if (fuseFlicker > 0.7) {
             ctx.fillStyle = '#FFD700';
             ctx.beginPath();
@@ -465,14 +717,14 @@ class Bomb {
         }
     }
 
-    // 檢查炸彈是否與切割線相交
+    // Check if bomb collides with cut line
     checkCutLineCollision(lineStart, lineEnd) {
-        // 計算點到線段的距離
+        // Calculate distance from bomb center to line segment
         const distance = pointToSegmentDistance({ x: this.x, y: this.y }, lineStart, lineEnd);
-        const isCollision = distance < this.radius + 15; // 增加容差使碰撞更容易檢測
+        const isCollision = distance < this.radius + 15; // Increased tolerance for easier detection
 
         if (isCollision) {
-            console.log(`💣 炸彈碰撞！距離: ${distance.toFixed(2)}, 炸彈位置: (${this.x.toFixed(0)}, ${this.y.toFixed(0)})`);
+            console.log(`[BOMB HIT] Distance: ${distance.toFixed(2)}, Bomb position: (${this.x.toFixed(0)}, ${this.y.toFixed(0)})`);
         }
 
         return isCollision;
@@ -481,243 +733,30 @@ class Bomb {
 
 
 // ============================================================================
-// 數學工具函數
+// Part 4: Shape Creation Functions for Each Level
 // ============================================================================
 
-// 計算兩條線段的交點
-function getLineIntersection(p1, p2, p3, p4) {
-    const x1 = p1.x, y1 = p1.y;
-    const x2 = p2.x, y2 = p2.y;
-    const x3 = p3.x, y3 = p3.y;
-    const x4 = p4.x, y4 = p4.y;
+// Create Level 1 Shape - Simple Square
+function createLevel1Shape(centerX, centerY, size) {
+    const halfSize = size / 2;
+    const vertices = [
+        { x: centerX - halfSize, y: centerY - halfSize },
+        { x: centerX + halfSize, y: centerY - halfSize },
+        { x: centerX + halfSize, y: centerY + halfSize },
+        { x: centerX - halfSize, y: centerY + halfSize }
+    ];
 
-    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (Math.abs(denom) < 0.0001) return null;
-
-    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
-    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
-
-    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-        return {
-            x: x1 + t * (x2 - x1),
-            y: y1 + t * (y2 - y1)
-        };
-    }
-    return null;
+    // All edges are black and cuttable
+    return new Polygon(vertices);
 }
 
-// 計算點到線段的最短距離
-function pointToSegmentDistance(point, segStart, segEnd) {
-    const px = point.x;
-    const py = point.y;
-    const x1 = segStart.x;
-    const y1 = segStart.y;
-    const x2 = segEnd.x;
-    const y2 = segEnd.y;
-
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const lengthSquared = dx * dx + dy * dy;
-
-    if (lengthSquared === 0) {
-        // 線段退化為點
-        return Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
-    }
-
-    // 計算投影參數 t
-    let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
-    t = Math.max(0, Math.min(1, t)); // 限制在 [0, 1]
-
-    // 最近點
-    const closestX = x1 + t * dx;
-    const closestY = y1 + t * dy;
-
-    return Math.sqrt((px - closestX) * (px - closestX) + (py - closestY) * (py - closestY));
-}
-
-// ============================================================================
-// MediaPipe Hands 設置
-// ============================================================================
-function setupMediaPipe() {
-    hands = new Hands({
-        locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        }
-    });
-
-    hands.setOptions({
-        maxNumHands: 1,  // 只偵測一隻手
-
-        modelComplexity: 1,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-    });
-
-    hands.onResults(onHandsResults);
-}
-
-// MediaPipe 結果回調
-let previousIndexTip = null;
-let gestureTrail = [];
-let handPositions = []; // 儲存所有手的位置
-
-function onHandsResults(results) {
-    // 清空之前的手部位置
-    handPositions = [];
-
-    // 繪製所有檢測到的手部追蹤點
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        // 顯示調試信息：檢測到的手部數量
-        const debugText = `檢測到 ${results.multiHandLandmarks.length} 隻手`;
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 20px Arial';
-        ctx.fillText(debugText, 20, canvas.height - 20);
-
-        // 處理每一隻手 (只處理第一隻檢測到的手，忽略其他)
-        const primaryHand = results.multiHandLandmarks[0];
-        if (primaryHand) {
-            const index = 0; // 強制使用 index 0
-            const indexTip = primaryHand[8]; // 食指尖端
-
-            // 轉換到畫布坐標
-            const x = (1 - indexTip.x) * canvas.width; // 鏡像翻轉
-            const y = indexTip.y * canvas.height;
-
-            // 儲存手部位置
-            handPositions.push({ x, y, handIndex: index });
-
-            // 繪製光點
-            const color = '#FF6B6B'; // 始終使用紅色
-
-            // 繪製光點外圈（發光效果）
-            const gradient = ctx.createRadialGradient(x, y, 0, x, y, 30);
-            gradient.addColorStop(0, color);
-            gradient.addColorStop(0.5, color + '80'); // 半透明
-            gradient.addColorStop(1, color + '00'); // 完全透明
-
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.arc(x, y, 30, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 繪製光點核心
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(x, y, 15, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 繪製光點白色中心點
-            ctx.fillStyle = '#FFFFFF';
-            ctx.beginPath();
-            ctx.arc(x, y, 6, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 在光點旁邊顯示標籤
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 16px Arial';
-            ctx.fillText(`手 1`, x + 25, y + 5);
-
-            // 檢查邊緣穿越
-            if (gameState === 'playing') {
-                checkEdgeCrossing({ x, y });
-
-                // 檢查紅線碰撞
-                if (currentShape && redLineCollisionCooldown <= 0) {
-                    const collisions = currentShape.checkPointEdgeCollision({ x, y }, 25);
-
-                    // 尋找是否碰撞到紅線
-                    const redLineCollision = collisions.find(c => !c.edgeProperty.cuttable);
-
-                    if (redLineCollision) {
-                        console.log('💥 碰撞紅線！', redLineCollision);
-
-                        // 播放音效
-                        if (collisionSound) {
-                            collisionSound();
-                        }
-
-                        // 創建火花
-                        for (let i = 0; i < 10; i++) {
-                            sparks.push(new Spark(x, y));
-                        }
-
-                        // 設置冷卻時間（500ms）
-                        redLineCollisionCooldown = 30; // 約 500ms (assuming 60fps)
-                    }
-                }
-
-                // 檢查手部是否碰到炸彈（關卡3）
-                if (currentLevel === 3 && bombs.length > 0) {
-                    for (let bomb of bombs) {
-                        const distance = Math.sqrt((x - bomb.x) ** 2 + (y - bomb.y) ** 2);
-
-                        // 如果手部碰到炸彈（距離小於炸彈半徑 + 手部檢測範圍）
-                        if (distance < bomb.radius + 25) {
-                            console.log('💥 手部碰到炸彈！觸發爆炸');
-                            triggerExplosion(bomb.x, bomb.y);
-                            return; // 立即結束，遊戲失敗
-                        }
-                    }
-                }
-            }
-
-            // 減少碰撞冷卻
-            if (redLineCollisionCooldown > 0) {
-                redLineCollisionCooldown--;
-            }
-
-            // 記錄軌跡（舊的滑動手勢）
-            gestureTrail.push({ x, y, time: Date.now() });
-
-            // 只保留最近 30 幀的軌跡
-            if (gestureTrail.length > 30) {
-                gestureTrail.shift();
-            }
-        }
-
-        // 檢測滑動手勢
-        detectSwipe();
-    } else {
-        // 沒有檢測到手部時顯示提示
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 24px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('請將一隻手放在鏡頭前', canvas.width / 2, canvas.height - 30);
-        ctx.textAlign = 'left'; // 恢復默認對齊
-    }
-}
-
-// 檢測滑動手勢
-function detectSwipe() {
-    if (gestureTrail.length < 15) return;
-
-    const start = gestureTrail[0];
-    const end = gestureTrail[gestureTrail.length - 1];
-
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const duration = end.time - start.time;
-    const speed = distance / duration;
-
-    // 如果速度夠快且距離夠長，視為滑動
-    if (speed > 0.3 && distance > 100) {
-        performSlice(start, end);
-        gestureTrail = []; // 清空軌跡
-    }
-}
-
-// ============================================================================
-// 遊戲邏輯
-// ============================================================================
-
-// 創建五角星
+// Create Level 2 Shape - 5-Point Star with Red Line Protection
 function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
     const vertices = [];
     const points = 5;
 
     for (let i = 0; i < points * 2; i++) {
-        const angle = (i * Math.PI) / points - Math.PI / 2; // 從頂部開始
+        const angle = (i * Math.PI) / points - Math.PI / 2; // Start from top
         const radius = i % 2 === 0 ? outerRadius : innerRadius;
         vertices.push({
             x: centerX + Math.cos(angle) * radius,
@@ -725,13 +764,19 @@ function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
         });
     }
 
-    // 創建邊緣屬性（根據上傳的新圖片，標記紅線）
-    // 五角星有10個頂點，編號0-9（從頂部順時針）
-    // 邊緣 i 連接頂點 i 到頂點 i+1
-    // 根據新圖片，紅線覆蓋右側的多條邊：邊緣 1, 2, 3, 4, 5
+    // Define edge properties - red lines on inner sides
+    // Star has 10 vertices (indexed 0-9, from outer points)
+    // Edge i connects vertex i to i+1
+    // Red lines cover inner edges: indices 1, 2, 3, 4, 5
     const edgeProperties = vertices.map((_, i) => {
-        // 紅線邊緣：1(右上), 2(右內), 3(右下內), 4(右下), 5(底部右)
-        const isRedLine = (i === 1 || i === 2 || i === 3 || i === 4 || i === 5);
+        // Red line edges based on user's latest correction (swap 0 for 1)
+        // 1: TR Inner -> TR Tip (Arrow pointed here)
+        // 3: BR Inner -> BR Tip
+        // 5: Bottom Inner -> Bottom Left Tip
+        // 7: Bottom Left Inner -> Left Tip
+        // 9: Top Left Inner -> Top
+        const redIndices = [1, 3, 5, 7, 9];
+        const isRedLine = redIndices.includes(i);
         return {
             color: isRedLine ? '#FF0000' : '#000000',
             cuttable: !isRedLine
@@ -741,50 +786,58 @@ function createStarPolygon(centerX, centerY, outerRadius, innerRadius) {
     return new Polygon(vertices, edgeProperties);
 }
 
-// 創建關卡 3 的十字架形狀 (v2.4 - 簡單空心十字)
+// Create Level 3 Shape - Cross/Plus Sign (Empty Center)
 function createLevel3Shape(centerX, centerY, size) {
-    const scale = size / 400; // 基準尺寸 400
-    const thickness = 40 * scale; // 十字臂的厚度
-    const armLength = 200 * scale; // 臂長
+    const scale = size / 400; // Base size 400
+    const thickness = 40 * scale; // Arm thickness
+    const armLength = 200 * scale; // Arm length
 
-    // 空心十字的外輪廓（順時針）
+    // Empty cross outline (clockwise from top-left)
     const outerVertices = [
-        // 上臂 - 從左上角開始順時針
+        // Top arm - from top-left corner clockwise
         { x: centerX - thickness, y: centerY - armLength },
         { x: centerX + thickness, y: centerY - armLength },
         { x: centerX + thickness, y: centerY - thickness },
 
-        // 右臂
+        // Right arm
         { x: centerX + armLength, y: centerY - thickness },
         { x: centerX + armLength, y: centerY + thickness },
         { x: centerX + thickness, y: centerY + thickness },
 
-        // 下臂
+        // Bottom arm
         { x: centerX + thickness, y: centerY + armLength },
         { x: centerX - thickness, y: centerY + armLength },
         { x: centerX - thickness, y: centerY + thickness },
 
-        // 左臂
+        // Left arm
         { x: centerX - armLength, y: centerY + thickness },
         { x: centerX - armLength, y: centerY - thickness },
         { x: centerX - thickness, y: centerY - thickness }
     ];
 
-    // 所有線都是黑色，無紅線保護區
-    const edgeProperties = outerVertices.map(() => ({
-        color: '#000000',
-        cuttable: true
-    }));
+    // Define edge properties - specific red lines
+    // Edge i connects vertex i to i+1
+    // Red lines based on user request:
+    // 1: Top Arm Right Edge
+    // 7: Bottom Arm Left Edge
+    // 8: Left Arm Bottom Edge
+    const edgeProperties = outerVertices.map((_, i) => {
+        const redIndices = [1, 7, 8];
+        const isRedLine = redIndices.includes(i);
+        return {
+            color: isRedLine ? '#FF0000' : '#000000',
+            cuttable: !isRedLine
+        };
+    });
 
-    console.log('✨ 關卡3形狀v2.4：空心十字，共', outerVertices.length, '個頂點');
     return new Polygon(outerVertices, edgeProperties);
 }
 
-// 創建關卡 4 的圓形 (v2.6)
-function createCircleShape(centerX, centerY, radius, segments = 64) {
+// Create Level 4 Shape - Circle (approximated with many vertices)
+function createLevel4Shape(centerX, centerY, radius) {
     const vertices = [];
+    const segments = 64; // 64-sided polygon approximates circle
 
-    // 生成圓形頂點
     for (let i = 0; i < segments; i++) {
         const angle = (i / segments) * Math.PI * 2;
         vertices.push({
@@ -793,759 +846,1538 @@ function createCircleShape(centerX, centerY, radius, segments = 64) {
         });
     }
 
-    // 所有線都是黑色，完全可切割
-    const edgeProperties = vertices.map(() => ({
-        color: '#000000',
-        cuttable: true
-    }));
-
-    console.log('✨ 關卡4形狀v2.6：圓形，共', vertices.length, '個頂點');
-    return new Polygon(vertices, edgeProperties);
+    // All edges are black and cuttable
+    return new Polygon(vertices);
 }
 
+// ============================================================================
+// MediaPipe Hands Setup and Tracking
+// ============================================================================
+function setupMediaPipe() {
+    hands = new Hands({
+        locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }
+    });
 
-// 創建音效
-function initAudio() {
-    // 使用 Web Audio API 創建簡單的碰撞音效
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    hands.setOptions({
+        maxNumHands: 2,  // Support two-player mode (single-player uses only first hand)
+        modelComplexity: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
 
-    collisionSound = () => {
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-
-        oscillator.frequency.value = 400; // "噹"聲的頻率
-        oscillator.type = 'sine';
-
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.3);
-    };
-
-    // 爆炸音效 "BOOM"
-    explosionSound = () => {
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        const oscillator2 = audioContext.createOscillator();
-        const gainNode2 = audioContext.createGain();
-
-        oscillator.connect(gainNode);
-        oscillator2.connect(gainNode2);
-        gainNode.connect(audioContext.destination);
-        gainNode2.connect(audioContext.destination);
-
-        // 低頻爆炸聲
-        oscillator.frequency.value = 50;
-        oscillator.type = 'sawtooth';
-
-        // 高頻爆炸聲
-        oscillator2.frequency.value = 150;
-        oscillator2.type = 'square';
-
-        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-
-        gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
-
-        oscillator2.start(audioContext.currentTime);
-        oscillator2.stop(audioContext.currentTime + 0.3);
-    };
+    hands.onResults(onHandsResults);
 }
 
+// MediaPipe results callback
+function onHandsResults(results) {
+    // Draw all detected hands for tracking
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        // Debug text (commented out for performance)
+        // const debugText = `Detected ${results.multiHandLandmarks.length} hand(s)`;
+        // ctx.fillStyle = '#FFFFFF';
+        // ctx.font = 'bold 20px Arial';
+        // ctx.fillText(debugText, 20, canvas.height - 20);
 
-// 初始化遊戲
-function initGame() {
-    const size = Math.min(canvas.width, canvas.height) * 0.55;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
+        // Process each hand
+        results.multiHandLandmarks.forEach((handLandmarks, index) => {
+            const indexTip = handLandmarks[8]; // Index finger tip
 
-    if (currentLevel === 1) {
-        // 關卡1: 正方形
-        currentShape = new Polygon([
-            { x: cx - size / 2, y: cy - size / 2 },
-            { x: cx + size / 2, y: cy - size / 2 },
-            { x: cx + size / 2, y: cy + size / 2 },
-            { x: cx - size / 2, y: cy + size / 2 }
-        ]);
-    } else if (currentLevel === 2) {
-        // 關卡2: 五角星（有紅線）
-        const outerRadius = size / 2;
-        const innerRadius = outerRadius * 0.38; // 標準五角星比例
-        currentShape = createStarPolygon(cx, cy, outerRadius, innerRadius);
-    } else if (currentLevel === 3) {
-        // 關卡3: 空心十字架
-        currentShape = createLevel3Shape(cx, cy, size);
-    } else if (currentLevel === 4) {
-        // 關卡4: 圓形
-        const radius = size / 2;
-        currentShape = createCircleShape(cx, cy, radius, 64);
+            // Convert to canvas coordinates (0-1 -> px)
+            // Note: MediaPipe output is usually mirrored, so (1 - x)
+            const x = (1 - indexTip.x) * canvas.width;
+            const y = indexTip.y * canvas.height;
+
+            // Determine which player this hand belongs to
+            let targetPlayer = null;
+
+            // Split screen logic ONLY applies during gameplay
+            if (gameMode === 'multi' && gameState === 'playing') {
+                // Simple rule: screen left half = P1, right half = P2
+                if (x < canvas.width / 2) {
+                    targetPlayer = players[0];
+                } else {
+                    targetPlayer = players[1];
+                }
+            } else {
+                // In single player OR menu (idle), only use the first detected hand
+                // This allows P1 to control the full screen in menu even if 'multi' is selected
+                if (index === 0) targetPlayer = players[0];
+            }
+
+            if (targetPlayer && !targetPlayer.completed) {
+                // Draw hand indicator (visual only)
+                const color = targetPlayer.id === 0 ? '#FF6B6B' : '#4ECDC4'; // P1 red, P2 cyan
+
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(x, y, 15, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Process input logic (assign to specific player)
+                handlePlayerInput({ x, y }, targetPlayer);
+            }
+        });
+    }
+}
+
+function handlePlayerInput(point, player) {
+    // Smoothing Logic (Exponential Moving Average)
+    // Alpha factor: 0.2 (strong smoothing) to 0.8 (responsive)
+    const alpha = 0.5;
+
+    // Initialize smooth cursor if not present
+    if (!player.smoothCursor) {
+        player.smoothCursor = { x: point.x, y: point.y };
     }
 
-    // 初始化原始面積
-    window.initialArea = currentShape.getArea();
-    console.log(`🎮 遊戲初始化！關卡 ${currentLevel}，原始面積:`, window.initialArea);
+    // Apply smoothing
+    player.smoothCursor.x = player.smoothCursor.x * (1 - alpha) + point.x * alpha;
+    player.smoothCursor.y = player.smoothCursor.y * (1 - alpha) + point.y * alpha;
 
-    // 關卡4設置範圍目標，其他關卡設置單一目標
-    if (currentLevel === 4) {
-        minTargetPercent = 10;
-        maxTargetPercent = 20;
-        targetPercent = 15; // 顯示中間值
+    const smoothPoint = {
+        x: player.smoothCursor.x,
+        y: player.smoothCursor.y
+    };
+
+    // Always update gesture trail for visual feedback and menu interaction
+    updateGestureTrail(smoothPoint, player);
+
+    if (gameState !== 'playing') return;
+
+    // Check edge crossing
+    checkEdgeCrossing(smoothPoint, player);
+
+    // Check red line collision
+    if (player.shape) {
+        const collisions = player.shape.checkPointEdgeCollision(smoothPoint, 25);
+        const redLineCollision = collisions.find(c => !c.edgeProperty.cuttable);
+
+        if (redLineCollision) {
+            // Simple feedback: play sound, could add cooldown (applied to player)
+            if (collisionSound) collisionSound();
+        }
+    }
+
+    // Check if hand touches bomb
+    if (player.bombs.length > 0) {
+        for (let bomb of player.bombs) {
+            const distance = Math.sqrt((smoothPoint.x - bomb.x) ** 2 + (smoothPoint.y - bomb.y) ** 2);
+            if (distance < bomb.radius + 25) {
+                triggerExplosion(bomb.x, bomb.y, player);
+                return;
+            }
+        }
+    }
+}
+
+function updateGestureTrail(point, player) {
+    player.gestureTrail.push(point);
+    if (player.gestureTrail.length > 20) {
+        player.gestureTrail.shift();
+    }
+}
+
+// ============================================================================
+// Edge Crossing Detection and Cutting Logic
+// ============================================================================
+function checkEdgeCrossing(point, player) {
+    if (!player.shape) return;
+
+    const isInside = player.shape.isPointInside(point);
+    const state = player.cuttingState;
+
+    if (!state.isInside && isInside) {
+        // Entering shape from outside
+        const entryPoint = player.shape.findEdgeIntersection(state.lastPosition || point, point);
+        if (entryPoint) {
+            state.isInside = true;
+            state.entryPoint = entryPoint;
+            state.currentPath = [entryPoint, point];
+            console.log('[ENTER SHAPE] Entry point:', entryPoint);
+        }
+    } else if (state.isInside && isInside) {
+        // Inside shape, continue path
+        state.currentPath.push(point);
+    } else if (state.isInside && !isInside) {
+        // Exiting shape to outside
+        const exitPoint = player.shape.findEdgeIntersection(state.lastPosition || point, point);
+        if (exitPoint) {
+            state.currentPath.push(exitPoint);
+            console.log('[EXIT SHAPE] Exit point:', exitPoint);
+
+            // Attempt to cut
+            attemptCut(state.entryPoint, exitPoint, player);
+
+            // Reset cutting state
+            state.isInside = false;
+            state.entryPoint = null;
+            state.currentPath = [];
+        }
+    } else if (!state.isInside && !isInside) {
+        // Fast Swipe check: Start and End are both outside, but might have crossed through
+        // Try slicing with the line segment directly
+        if (state.lastPosition) {
+            // Check if this segment intersects twice (meaning it went through)
+            // We can use the slice method directly, as it handles intersection checking
+            const pieces = player.shape.slice(state.lastPosition, point);
+
+            if (pieces) {
+                console.log('[FAST SWIPE] Detected cut through shape!');
+
+                // Check for red line crossing
+                if (player.shape.checkCutThroughUncuttableEdge(state.lastPosition, point)) {
+                    console.log('[CUT BLOCKED] Fast swipe crossed red line!');
+                    if (audioCtrl) audioCtrl.playBlocked();
+                    showMessage(t('redLineBlock'));
+                    return;
+                }
+
+                // Check for BOMB collision (Fast Swipe)
+                if (player.bombs.length > 0) {
+                    for (let bomb of player.bombs) {
+                        if (bomb.checkCutLineCollision(state.lastPosition, point)) {
+                            triggerExplosion(bomb.x, bomb.y, player);
+                            return;
+                        }
+                    }
+                }
+
+                // Resolving the cut
+                resolveCut(pieces, state.lastPosition, point, player);
+            }
+        }
+    }
+
+    state.lastPosition = point;
+}
+
+function resolveCut(pieces, startPt, endPt, player) {
+    if (!pieces) return;
+
+    const [poly1, poly2] = pieces;
+    const area1 = poly1.getArea();
+    const area2 = poly2.getArea();
+
+    console.log(`[CUT SUCCESS] Area 1: ${area1.toFixed(2)}, Area 2: ${area2.toFixed(2)}`);
+
+    // Smaller piece falls away
+    if (area1 < area2) {
+        player.shape = poly2;
+        player.fallingPieces.push(new FallingPiece(poly1));
     } else {
-        targetPercent = 10;
-        minTargetPercent = 10;
-        maxTargetPercent = 10;
+        player.shape = poly1;
+        player.fallingPieces.push(new FallingPiece(poly2));
     }
 
-    gameState = 'playing';
-    fallingPieces = [];
-    sparks = [];
-
-    // 關卡3和4初始化炸彈
-    bombs = [];
-    if (currentLevel === 3) {
-        spawnBomb();
-        console.log('💣 關卡3：已生成炸彈');
-    } else if (currentLevel === 4) {
-        // 關卡4: 生成2個炸彈（一快一慢）
-        spawnBombForLevel4(1.5); // 慢速
-        spawnBombForLevel4(3.5); // 快速
-        console.log('💣 關卡4：已生成 2 個炸彈（快/慢）');
+    // Create sparks
+    for (let i = 0; i < 10; i++) {
+        const midX = (startPt.x + endPt.x) / 2;
+        const midY = (startPt.y + endPt.y) / 2;
+        player.sparks.push(new Spark(midX, midY));
     }
 
-    // 關卡4啟動計時器
-    stopTimer(); // 清除舊計時器
-    if (currentLevel === 4) {
-        timeRemaining = 30;
-        timerActive = true;
-        startTimer();
-        // 顯示計時器UI
-        document.getElementById('timerBox').style.display = 'block';
-    } else {
-        timerActive = false;
-        // 隱藏計時器UI
-        document.getElementById('timerBox').style.display = 'none';
-    }
+    // Play sound
+    if (audioCtrl) audioCtrl.playCut();
 
+    // Update display
     updateUI();
 }
 
-// 生成炸彈
-function spawnBomb() {
-    if (!currentShape) return;
+function attemptCut(entryPoint, exitPoint, player) {
+    if (!entryPoint || !exitPoint || !player.shape) return;
 
-    // 計算形狀的中心點
-    let centerX = 0, centerY = 0;
-    currentShape.vertices.forEach(v => {
-        centerX += v.x;
-        centerY += v.y;
-    });
-    centerX /= currentShape.vertices.length;
-    centerY /= currentShape.vertices.length;
+    console.log('[ATTEMPTING CUT] From entry to exit...');
 
-    // 隨機方向
-    const angle = Math.random() * Math.PI * 2;
-    const vx = Math.cos(angle);
-    const vy = Math.sin(angle);
+    // Check if cut crosses red lines
+    if (player.shape.checkCutThroughUncuttableEdge(entryPoint, exitPoint)) {
+        console.log('[CUT BLOCKED] Cannot cut through red line!');
+        showMessage(t('redLineBlock'));
+        return;
+    }
 
-    // 根據關卡調整炸彈速度
-    let speed = 1.5;
-    if (currentLevel === 2) speed = 2.0;
-    if (currentLevel === 3) speed = 2.5;
+    // Check if cut hits bomb
+    if (player.bombs.length > 0) {
+        for (let bomb of player.bombs) {
+            if (bomb.checkCutLineCollision(entryPoint, exitPoint)) {
+                triggerExplosion(bomb.x, bomb.y, player);
+                return;
+            }
+        }
+    }
 
-    bombs.push(new Bomb(centerX, centerY, vx, vy, speed));
-    console.log(`💣 炸彈已生成！速度: ${speed}`);
+    // Slice the polygon
+    const pieces = player.shape.slice(entryPoint, exitPoint);
+
+    if (!pieces) {
+        console.log('[CUT FAILED] Could not slice polygon');
+        return;
+    }
+
+    // Reuse resolve logic
+    resolveCut(pieces, entryPoint, exitPoint, player);
 }
 
-// 生成關卡4的炸彈（指定速度）
-function spawnBombForLevel4(speed) {
-    if (!currentShape) return;
 
-    // 計算形狀的中心點
-    let centerX = 0, centerY = 0;
-    currentShape.vertices.forEach(v => {
-        centerX += v.x;
-        centerY += v.y;
+// ============================================================================
+// Part 5: Game Initialization, UI Updates, and Core Game Logic
+// ============================================================================
+
+// ============================================================================
+// Game Initialization
+// ============================================================================
+function initGame() {
+    console.log('[INIT GAME] Mode:', gameMode, 'Level:', currentLevel);
+
+    // Reset game state
+    gameState = 'playing';
+    p1TotalWins = gameMode === 'multi' ? p1TotalWins : 0; // Preserve wins in multi-player
+    p2TotalWins = gameMode === 'multi' ? p2TotalWins : 0;
+
+    // Set target percentage based on level
+    if (currentLevel === 4) {
+        targetPercent = minTargetPercent; // Level 4 has range 10-20%
+    } else {
+        targetPercent = 10; // All other levels: 10%
+    }
+
+    // Setup timer
+    if (gameMode === 'multi') {
+        timeRemaining = 60; // All two-player levels: 60 seconds
+        timerActive = true;
+    } else {
+        if (currentLevel === 4) {
+            timeRemaining = 30; // Single-player level 4: 30 seconds
+            timerActive = true;
+        } else {
+            timerActive = false; // Other single-player levels: no timer
+        }
+    }
+
+    // Initialize players based on game mode
+    // Ensure P1 UI is visible (might be hidden by reset)
+    const p1UI = document.getElementById('p1UI');
+    if (p1UI) p1UI.style.display = 'flex';
+
+    if (gameMode === 'multi') {
+        const halfWidth = canvas.width / 2;
+        players = [
+            new PlayerState(0, { x: 0, y: 0, width: halfWidth, height: canvas.height }),
+            new PlayerState(1, { x: halfWidth, y: 0, width: halfWidth, height: canvas.height })
+        ];
+
+        // Show P2 UI and WIN boxes
+        document.getElementById('p2UI').style.display = 'flex';
+        document.getElementById('p1-winsBox').style.display = 'block';
+        document.getElementById('p2-winsBox').style.display = 'block';
+
+        // Show split-screen divider
+        const splitLine = document.getElementById('splitLine');
+        if (splitLine) splitLine.style.display = 'block';
+
+    } else {
+        players = [
+            new PlayerState(0, { x: 0, y: 0, width: canvas.width, height: canvas.height })
+        ];
+
+        // Hide P2 UI and WIN boxes
+        document.getElementById('p2UI').style.display = 'none';
+        document.getElementById('p1-winsBox').style.display = 'none';
+        document.getElementById('p2-winsBox').style.display = 'none';
+
+        // Hide split-screen divider
+        const splitLine = document.getElementById('splitLine');
+        if (splitLine) splitLine.style.display = 'none';
+    }
+
+    // Create shapes for each player
+    players.forEach(player => {
+        player.reset(); // Reset before creating shape to avoid clearing it!
+
+        const centerX = player.viewport.x + player.viewport.width / 2;
+        const centerY = player.viewport.y + player.viewport.height / 2;
+        const size = Math.min(player.viewport.width, player.viewport.height) * 0.6;
+
+        createShapeForPlayer(player);
+
+        player.initialArea = player.shape.getArea();
+
+        // Level 3: Add Bomb
+        // Level 3: Add Bomb
+        if (currentLevel === 3) {
+            // Random direction
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 2; // pixel speed
+            const vx = Math.cos(angle);
+            const vy = Math.sin(angle);
+
+            player.bombs.push(new Bomb(centerX, centerY, vx, vy, speed));
+        }
+
+        // Level 4: Add TWO Bombs (Different Speeds)
+        if (currentLevel === 4) {
+            // Bomb 1: Slow (Speed 2)
+            let angle = Math.random() * Math.PI * 2;
+            let speed = 2;
+            let vx = Math.cos(angle);
+            let vy = Math.sin(angle);
+            player.bombs.push(new Bomb(centerX, centerY, vx, vy, speed));
+
+            // Bomb 2: Fast (Speed 5)
+            angle = Math.random() * Math.PI * 2;
+            speed = 5;
+            vx = Math.cos(angle);
+            vy = Math.sin(angle);
+            player.bombs.push(new Bomb(centerX, centerY, vx, vy, speed));
+        }
     });
-    centerX /= currentShape.vertices.length;
-    centerY /= currentShape.vertices.length;
 
-    // 隨機方向
-    const angle = Math.random() * Math.PI * 2;
-    const vx = Math.cos(angle);
-    const vy = Math.sin(angle);
+    // Update UI
+    updateUI();
 
-    bombs.push(new Bomb(centerX, centerY, vx, vy, speed));
+    // Start timer if active
+    if (timerActive) {
+        startTimer();
+    }
+
+    console.log('[INIT GAME] Complete. Players:', players.length);
 }
 
-// 啟動計時器
+// ============================================================================
+// Update UI Display
+// ============================================================================
+function updateUI() {
+    players.forEach(player => {
+        const prefix = `p${player.id + 1}-`;
+
+        // Update level display
+        const levelEl = document.getElementById(prefix + 'levelDisplay');
+        if (levelEl) levelEl.textContent = currentLevel;
+
+        // Update target display
+        const targetEl = document.getElementById(prefix + 'targetPercent');
+        if (currentLevel === 4 && targetEl) {
+            targetEl.textContent = `${minTargetPercent}-${maxTargetPercent}%`;
+        } else if (targetEl) {
+            targetEl.textContent = `${targetPercent}%`;
+        }
+
+        // Update current area percentage
+        const areaEl = document.getElementById(prefix + 'currentPercent');
+        if (player.shape && player.initialArea > 0) {
+            const currentArea = player.shape.getArea();
+            const percent = (currentArea / player.initialArea) * 100;
+            if (areaEl) areaEl.textContent = `${percent.toFixed(1)}%`;
+        } else if (areaEl) {
+            areaEl.textContent = '100%';
+        }
+
+        // Update WIN count for two-player mode
+        if (gameMode === 'multi') {
+            const winsEl = document.getElementById(prefix + 'wins');
+            const totalWins = player.id === 0 ? p1TotalWins : p2TotalWins;
+            if (winsEl) winsEl.textContent = totalWins;
+        }
+    });
+
+    // Update timer display
+    const timerDisplay = document.getElementById('timerDisplay');
+    const timerBox = document.getElementById('timerBox');
+
+    if (timerDisplay && timerBox) {
+        if (timerActive) {
+            timerBox.style.display = 'block';
+            timerDisplay.textContent = `${timeRemaining}`;
+            timerDisplay.style.color = timeRemaining <= 10 ? '#FF6B6B' : '#FFFFFF';
+        } else {
+            timerBox.style.display = 'none';
+        }
+    }
+}
+
+// ============================================================================
+// Timer Management
+// ============================================================================
 function startTimer() {
     if (gameTimer) clearInterval(gameTimer);
 
     gameTimer = setInterval(() => {
-        if (!timerActive || gameState !== 'playing') {
-            stopTimer();
+        if (gameState !== 'playing') {
+            clearInterval(gameTimer);
             return;
         }
 
         timeRemaining--;
-        updateTimerDisplay();
+        updateUI();
+
+        if (timeRemaining <= 10 && timeRemaining > 0) {
+            // Ticking sound for last 10 seconds
+            if (audioCtrl) audioCtrl.playTone(880, 'sine', 0.05);
+        }
 
         if (timeRemaining <= 0) {
-            stopTimer();
-            // 時間到，遊戲失敗
-            gameState = 'lost';
-            showMessage('⏰ 時間到！遊戲失敗！');
+            clearInterval(gameTimer);
+            timerActive = false;
 
-            setTimeout(() => {
-                initGame(); // 重新開始關卡4
-            }, 3000);
+            // Time's up - end level
+            console.log('[TIMER] Times up!');
+            if (audioCtrl) audioCtrl.playBlocked(); // Fail sound
+            endLevel();
         }
-    }, 1000); // 每秒更新
+    }, 1000);
 }
 
-// 停止計時器
-function stopTimer() {
-    if (gameTimer) {
-        clearInterval(gameTimer);
-        gameTimer = null;
+// ============================================================================
+// Part 6: Main Game Loop
+// ============================================================================
+
+// --- Menu System ---
+class MenuButton {
+    constructor(x, y, width, height, label, color, action) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.label = label;
+        this.color = color;
+        this.action = action;
+
+        // Create polygon for collision detection and drawing
+        this.polygon = new Polygon([
+            { x: x, y: y },
+            { x: x + width, y: y },
+            { x: x + width, y: y + height },
+            { x: x, y: y + height }
+        ]);
+
+        this.baseColor = color;
+        this.highlightColor = '#FFFFFF';
+        this.isHovered = false;
+        this.lastTriggerTime = 0; // Debounce cooldown
+        this.hoverStartTime = 0;  // Dwell time tracker
+        this.requiredHoverTime = 500; // 0.5s dwell required for tap
     }
-    timerActive = false;
-}
 
-// 更新計時器顯示
-function updateTimerDisplay() {
-    const timerEl = document.getElementById('timerDisplay');
-    if (timerEl) {
-        timerEl.textContent = timeRemaining;
+    draw(ctx) {
+        // Draw Button Background
+        ctx.save();
+        ctx.fillStyle = this.isHovered ? this.highlightColor : this.baseColor;
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 5;
 
-        // 時間少於10秒時變紅色
-        if (timeRemaining <= 10) {
-            timerEl.style.color = '#EF4444';
+        ctx.beginPath();
+        ctx.roundRect(this.x, this.y, this.width, this.height, 15);
+        ctx.fill();
+
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Draw Label
+        ctx.fillStyle = this.isHovered ? this.baseColor : '#FFFFFF';
+        ctx.font = 'bold 24px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 0;
+        ctx.fillText(this.t(this.label), this.x + this.width / 2, this.y + this.height / 2);
+
+        ctx.restore();
+    }
+
+    t(key) {
+        // Simple translation helper or return key if not found
+        return translations[currentLanguage][key] || key;
+    }
+
+    checkCut(p1, p2) {
+        // Debounce check (500ms cooldown)
+        if (Date.now() - this.lastTriggerTime < 500) return false;
+
+        let triggered = false;
+
+        // 1. Check if either point is INSIDE the button (Tap/Hover interaction)
+        // REQUIRE DWELL TIME: Must hover for 0.5s to trigger
+        const isInside = isPointInPolygon(p1, this.polygon.vertices) || isPointInPolygon(p2, this.polygon.vertices);
+
+        if (isInside) {
+            if (this.hoverStartTime === 0) this.hoverStartTime = Date.now();
+            this.isHovered = true; // Visual feedback
+
+            if (Date.now() - this.hoverStartTime > this.requiredHoverTime) {
+                triggered = true;
+                this.hoverStartTime = 0; // Reset after trigger
+            }
         } else {
-            timerEl.style.color = '#FFFFFF';
-        }
-    }
-}
-
-
-// 檢查邊緣穿越並執行切割
-function checkEdgeCrossing(point) {
-    if (!currentShape || gameState !== 'playing') return;
-
-    const wasInside = cuttingState.isInside;
-    const isInside = currentShape.isPointInside(point);
-
-    if (!wasInside && isInside) {
-        // 進入圖形 - 找到進入點
-        let entryPoint = null;
-
-        if (cuttingState.lastPosition) {
-            entryPoint = currentShape.findEdgeIntersection(cuttingState.lastPosition, point);
+            this.hoverStartTime = 0;
+            this.isHovered = false;
         }
 
-        // 如果找不到精確交點，使用當前點
-        if (!entryPoint) {
-            entryPoint = { x: point.x, y: point.y };
-        }
+        // 2. Check if cut line intersects the button polygon
+        if (!triggered) {
+            const intersections = [];
+            const n = this.polygon.vertices.length;
 
-        cuttingState.entryPoint = entryPoint;
-        cuttingState.isInside = true;
-        cuttingState.currentPath = [entryPoint];
-
-        console.log('✅ 進入圖形！', entryPoint);
-
-    } else if (wasInside && !isInside) {
-        // 離開圖形 - 找到離開點並執行切割
-        if (cuttingState.entryPoint) {
-            let exitPoint = null;
-
-            if (cuttingState.lastPosition) {
-                exitPoint = currentShape.findEdgeIntersection(cuttingState.lastPosition, point);
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                const intersection = getLineIntersection(
+                    p1, p2,
+                    this.polygon.vertices[i], this.polygon.vertices[j]
+                );
+                if (intersection) {
+                    intersections.push(intersection);
+                }
             }
+            if (intersections.length >= 2) triggered = true;
+        }
 
-            // 如果找不到精確交點，使用最後一個內部點
-            if (!exitPoint && cuttingState.currentPath.length > 0) {
-                exitPoint = cuttingState.currentPath[cuttingState.currentPath.length - 1];
+        if (triggered) {
+            this.lastTriggerTime = Date.now();
+            return true;
+        }
+        return false;
+    }
+}
+
+let menuButtons = [];
+let startButton = null;
+
+function initMenu() {
+    menuButtons = [];
+
+    const centerY = canvas.height * 0.75;
+    const sectionY = canvas.height * 0.65;
+
+    // Calculate column centers
+    const col1X = canvas.width * 0.20; // Mode
+    const col2X = canvas.width * 0.50; // Level
+    const col3X = canvas.width * 0.80; // Start
+
+    // --- Mode Selection (Left) ---
+    const modeBtnWidth = 140;
+    const modeBtnHeight = 50;
+    const modeGap = 10;
+
+    // Single Player
+    menuButtons.push(new MenuButton(col1X - modeBtnWidth - modeGap / 2, sectionY, modeBtnWidth, modeBtnHeight, 'singlePlayer', '#4ECDC4', () => {
+        gameMode = 'single';
+        console.log("Selected Single Player");
+    }));
+
+    // Two Players
+    menuButtons.push(new MenuButton(col1X + modeGap / 2, sectionY, modeBtnWidth, modeBtnHeight, 'twoPlayers', '#FF6B6B', () => {
+        gameMode = 'multi';
+        console.log("Selected Multi Player");
+    }));
+
+
+    // --- Level Selection (Center) ---
+    const lvlBtnSize = 60;
+    const lvlGap = 15;
+    const lvlTotalWidth = (lvlBtnSize * 4) + (lvlGap * 3);
+    let lvlStartX = col2X - lvlTotalWidth / 2;
+
+    for (let i = 1; i <= 4; i++) {
+        menuButtons.push(new MenuButton(lvlStartX + (i - 1) * (lvlBtnSize + lvlGap), sectionY, lvlBtnSize, lvlBtnSize, i.toString(), '#FFD700', () => {
+            currentLevel = i;
+            console.log("Selected Level", i);
+        }));
+    }
+
+    // --- Start Game (Right) ---
+    const startBtnWidth = 200;
+    const startBtnHeight = 80;
+    menuButtons.push(new MenuButton(col3X - startBtnWidth / 2, sectionY - 10, startBtnWidth, startBtnHeight, 'startGame', '#FFFFFF', () => {
+        startGame(currentLevel);
+    }));
+}
+
+function updateMenu() {
+    // Check for cuts on menu buttons using player hand trails
+    // We can reuse the player's cutting logic concept but applied to menu buttons
+
+    // Use the first player's hand for menu interaction (or both if available?)
+    // Let's iterate all active hands/players
+
+    // Since we don't have initialized 'players' array in idle state fully set up for game logic,
+    // we need to rely on the tracking data coming from 'hands.onResults'.
+    // BUT, 'onResults' calls 'draw' loop.
+    // Let's implement a simple cut detector here using the global 'players' array if strictly managed,
+    // or better, pass the detected landmarks to a tailored menu updater.
+
+    // Actually, 'players' array handles the trail logic in 'update()'.
+    // We just need to ensure 'update()' calls 'updateMenu()' and passes necessary info if state is 'idle'.
+
+    // NOTE: In 'idle' state, we need at least one "PlayerState" to track the hand trail for the menu.
+    // Let's ensure we have a temporary player state for menu interaction.
+    if (players.length === 0) {
+        players.push(new PlayerState(0, { x: 0, y: 0, width: canvas.width, height: canvas.height }));
+    }
+
+    players.forEach(player => {
+        // We need to feed landmark data to player.
+        // This happens in onHandsResults -> update -> but we need to ensure inputs reach here.
+        // For now preventing logic duplication, let's assume 'player.gestureTrail' is populated.
+
+        if (player.gestureTrail.length < 2) return;
+
+        const p1 = player.gestureTrail[player.gestureTrail.length - 2];
+        const p2 = player.gestureTrail[player.gestureTrail.length - 1];
+
+        // Check cuts
+        menuButtons.forEach(btn => {
+            if (btn.checkCut(p1, p2)) {
+                // Action triggered!
+                // Add some visual effect?
+                createExplosion(btn.x + btn.width / 2, btn.y + btn.height / 2, player);
+                btn.action();
             }
-
-            if (exitPoint) {
-                console.log('✂️ 離開圖形！', exitPoint);
-                performEdgeBasedCut(cuttingState.entryPoint, exitPoint);
-            }
-        }
-
-        // 重置狀態
-        cuttingState.isInside = false;
-        cuttingState.entryPoint = null;
-        cuttingState.currentPath = [];
-
-    } else if (isInside && cuttingState.entryPoint) {
-        // 還在圖形內，追蹤路徑
-        cuttingState.currentPath.push({ x: point.x, y: point.y });
-
-        // 限制路徑長度
-        if (cuttingState.currentPath.length > 100) {
-            cuttingState.currentPath.shift();
-        }
-    }
-
-    cuttingState.lastPosition = { x: point.x, y: point.y };
-}
-
-// 執行基於邊緣的切割
-function performEdgeBasedCut(entryPoint, exitPoint) {
-    if (!currentShape || gameState !== 'playing') return;
-
-    console.log('🔪 開始切割...', { entry: entryPoint, exit: exitPoint });
-
-    // 檢查切割線是否碰到炸彈
-    for (let bomb of bombs) {
-        if (bomb.checkCutLineCollision(entryPoint, exitPoint)) {
-            console.log('💥 切割線碰到炸彈！');
-            triggerExplosion(bomb.x, bomb.y);
-            return; // 遊戲失敗，不執行切割
-        }
-    }
-
-    // 檢查切割線是否穿過紅線（不可切割的邊緣）
-    if (currentShape.checkCutThroughUncuttableEdge(entryPoint, exitPoint)) {
-        console.log('❌ 切割被紅線阻擋！');
-        showMessage('🚫 紅線無法切割！');
-        return; // 阻止切割
-    }
-
-    const result = currentShape.slice(entryPoint, exitPoint);
-    if (!result) {
-        console.log('❌ 切割失敗 - 無法找到兩個交點');
-        return;
-    }
-
-    const [poly1, poly2] = result;
-    const area1 = poly1.getArea();
-    const area2 = poly2.getArea();
-
-    console.log('✅ 切割成功！面積:', { area1: Math.round(area1), area2: Math.round(area2) });
-
-    // 確定哪個是較小的部分（保留較小的，讓較大的掉落）
-    let keepPoly, discardPoly;
-    if (area1 < area2) {
-        keepPoly = poly1;  // 保留較小的
-        discardPoly = poly2;  // 丟棄較大的
-    } else {
-        keepPoly = poly2;  // 保留較小的
-        discardPoly = poly1;  // 丟棄較大的
-    }
-
-    // 移除在被捨棄區域內的炸彈
-    bombs = bombs.filter(bomb => {
-        const bombPos = { x: bomb.x, y: bomb.y };
-        const isInDiscarded = discardPoly.isPointInside(bombPos);
-        if (isInDiscarded) {
-            console.log('💥 炸彈跟隨切掉的部分消失');
-        }
-        return !isInDiscarded; // 保留不在被捨棄區域的炸彈
-    });
-
-    // 更新當前圖形為較大的部分
-    currentShape = keepPoly;
-
-    // 添加較小的部分到掉落動畫
-    fallingPieces.push(new FallingPiece(discardPoly));
-
-    // 立即更新UI顯示百分比
-    updateUI();
-
-    console.log('📊 切割後面積:', Math.round(currentShape.getArea()), '原始面積:', Math.round(window.initialArea), '百分比:', ((currentShape.getArea() / window.initialArea) * 100).toFixed(1) + '%');
-
-    checkWinCondition();
-}
-
-// 觸發爆炸
-function triggerExplosion(x, y) {
-    console.log('💥💥💥 爆炸！遊戲失敗！');
-
-    // 播放爆炸音效
-    if (explosionSound) {
-        explosionSound();
-    }
-
-    // 創建大量火花
-    for (let i = 0; i < 50; i++) {
-        sparks.push(new Spark(x, y));
-    }
-
-    // 創建閃光效果
-    const flash = document.createElement('div');
-    flash.className = 'explosion-flash';
-    document.querySelector('.game-container').appendChild(flash);
-
-    // 移除閃光效果
-    setTimeout(() => {
-        flash.remove();
-    }, 500);
-
-    // 設置遊戲失敗
-    gameState = 'lost';
-    showMessage('💥 炸彈爆炸！遊戲失敗！');
-
-    // 3秒後重新開始當前關卡
-    setTimeout(() => {
-        initGame();
-    }, 3000);
-}
-
-
-// 檢查勝利條件
-function checkWinCondition() {
-    if (!currentShape || !window.initialArea) return;
-
-    const currentPercent = (currentShape.getArea() / window.initialArea) * 100;
-
-    // 關卡4的特殊範圍檢查
-    if (currentLevel === 4) {
-        // 檢查是否小於最小目標（失敗）
-        if (currentPercent < minTargetPercent) {
-            gameState = 'lost';
-            stopTimer();
-            showMessage(`❌ 面積太小！低於 ${minTargetPercent}%！遊戲失敗！`);
-
-            setTimeout(() => {
-                initGame(); // 重新開始關卡4
-            }, 3000);
-            return;
-        }
-
-        // 檢查是否在目標範圍內（勝利）
-        if (currentPercent >= minTargetPercent && currentPercent <= maxTargetPercent) {
-            gameState = 'won';
-            stopTimer();
-            showMessage(`🎊 完美！面積在 ${minTargetPercent}%-${maxTargetPercent}% 範圍內！通關所有關卡！`);
-            return;
-        }
-
-        // 如果大於最大目標，繼續遊戲
-        return;
-    }
-
-    // 其他關卡的標準檢查
-    if (currentPercent <= targetPercent) {
-        if (currentLevel === 1) {
-            // 進入第二關
-            gameState = 'won'; // 暫停遊戲
-            currentLevel = 2;
-            showMessage('🎉 第一關完成！進入五角星關卡...');
-
-            setTimeout(() => {
-                gameState = 'playing'; // 重新開始遊戲
-                initGame();
-            }, 2000);
-        } else if (currentLevel === 2) {
-            // 進入第三關
-            gameState = 'won'; // 暫停遊戲
-            currentLevel = 3;
-            showMessage('🎉 第二關完成！進入十字架關卡...');
-
-            setTimeout(() => {
-                gameState = 'playing'; // 重新開始遊戲
-                initGame();
-            }, 2000);
-        } else if (currentLevel === 3) {
-            // 進入第四關
-            gameState = 'won'; // 暫停遊戲
-            currentLevel = 4;
-            showMessage('🎉 第三關完成！進入最終關卡（計時挑戰）...');
-
-            setTimeout(() => {
-                gameState = 'playing'; // 重新開始遊戲
-                initGame();
-            }, 2000);
-        }
-    }
-}
-
-// 執行切割（保留舊的滑動手勢功能）
-function performSlice(start, end) {
-    if (!currentShape || gameState !== 'playing') return;
-
-    // 檢查切割線是否碰到炸彈
-    for (let bomb of bombs) {
-        if (bomb.checkCutLineCollision(start, end)) {
-            console.log('💥 滑動切割碰到炸彈！');
-            triggerExplosion(bomb.x, bomb.y);
-            return; // 遊戲失敗，不執行切割
-        }
-    }
-
-    // 檢查切割線是否穿過紅線
-    if (currentShape.checkCutThroughUncuttableEdge(start, end)) {
-        console.log('❌ 滑動切割被紅線阻擋！');
-        showMessage('🚫 紅線無法切割！');
-        return;
-    }
-
-    const result = currentShape.slice(start, end);
-    if (!result) return;
-
-    const [poly1, poly2] = result;
-    const area1 = poly1.getArea();
-    const area2 = poly2.getArea();
-
-    console.log('✂️ 滑動手勢切割！面積:', { area1: Math.round(area1), area2: Math.round(area2) });
-
-    // 確定哪個是較小的部分（保留較小的，讓較大的掉落）
-    let keepPoly, discardPoly;
-    if (area1 < area2) {
-        keepPoly = poly1;  // 保留較小的
-        discardPoly = poly2;  // 丟棄較大的
-    } else {
-        keepPoly = poly2;  // 保留較小的
-        discardPoly = poly1;  // 丟棄較大的
-    }
-
-    // 移除在被捨棄區域內的炸彈
-    bombs = bombs.filter(bomb => {
-        const bombPos = { x: bomb.x, y: bomb.y };
-        const isInDiscarded = discardPoly.isPointInside(bombPos);
-        if (isInDiscarded) {
-            console.log('💥 炸彈跟隨切掉的部分消失（滑動）');
-        }
-        return !isInDiscarded;
-    });
-
-    // 保留較大的部分
-    currentShape = keepPoly;
-
-    // 添加較小的部分到掉落動畫
-    fallingPieces.push(new FallingPiece(discardPoly));
-
-    // 立即更新UI
-    updateUI();
-
-    console.log('📊 滑動切割後面積:', Math.round(currentShape.getArea()), '原始面積:', Math.round(window.initialArea), '百分比:', ((currentShape.getArea() / window.initialArea) * 100).toFixed(1) + '%');
-
-    checkWinCondition();
-}
-
-// 更新 UI
-function updateUI() {
-    if (!currentShape) {
-        console.warn('⚠️ updateUI: currentShape 不存在');
-        return;
-    }
-
-    if (!window.initialArea) {
-        console.warn('⚠️ updateUI: window.initialArea 不存在');
-        return;
-    }
-
-    const currentArea = currentShape.getArea();
-    const currentPercent = (currentArea / window.initialArea) * 100;
-
-    console.log('🔄 更新UI - 當前面積:', Math.round(currentArea), '原始面積:', Math.round(window.initialArea), '百分比:', currentPercent.toFixed(1) + '%');
-
-    document.getElementById('currentPercent').textContent = currentPercent.toFixed(1) + '%';
-
-    // 關卡4顯示範圍，其他關卡顯示單一數值
-    if (currentLevel === 4) {
-        document.getElementById('targetPercent').textContent = `${minTargetPercent}%-${maxTargetPercent}%`;
-    } else {
-        document.getElementById('targetPercent').textContent = targetPercent + '%';
-    }
-
-    // 更新關卡顯示
-    const levelDisplay = document.getElementById('levelDisplay');
-    if (levelDisplay) {
-        levelDisplay.textContent = currentLevel;
-    }
-}
-
-// 顯示訊息
-function showMessage(text) {
-    const messageEl = document.getElementById('gameMessage');
-    messageEl.textContent = text;
-    messageEl.classList.remove('hidden');
-
-    setTimeout(() => {
-        messageEl.classList.add('hidden');
-    }, 3000);
-}
-
-// ============================================================================
-// 遊戲循環
-// ============================================================================
-function gameLoop() {
-    // 清空畫布
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // 繪製圖形
-    if (currentShape && gameState === 'playing') {
-        // v2.6 新的顏色方案 - 更鮮明的配色
-        let shapeColor = '#10B981'; // 翠綠色 - Level 1
-        if (currentLevel === 2) shapeColor = '#8B5CF6'; // 紫色 - Level 2
-        if (currentLevel === 3) shapeColor = '#EF4444'; // 紅色 - Level 3
-        if (currentLevel === 4) shapeColor = '#F59E0B'; // 金色 - Level 4
-
-        currentShape.draw(shapeColor, 4, '#000000');
-    }
-
-    // 更新並繪製炸彈
-    if (gameState === 'playing') {
-        bombs.forEach(bomb => {
-            bomb.update();
-
-            // 檢查炸彈是否碰到邊緣
-            const collision = bomb.checkEdgeCollision(currentShape);
-            if (collision) {
-                bomb.bounce(collision);
-            }
-
-            bomb.draw();
         });
-    }
+    });
+}
 
-    // 更新並繪製掉落的碎片
-    fallingPieces = fallingPieces.filter(piece => {
-        piece.update();
-        piece.draw();
-        return !piece.isOffScreen();
+function drawMenu() {
+    // Draw Section Titles
+    ctx.font = '20px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.textAlign = 'center';
+
+    // Helper to check selection for styling
+    menuButtons.forEach(btn => {
+        // Highlight logic
+        if (btn.label === 'singlePlayer' && gameMode === 'single') btn.baseColor = '#4ECDC4';
+        else if (btn.label === 'singlePlayer') btn.baseColor = '#333';
+
+        if (btn.label === 'twoPlayers' && gameMode === 'multi') btn.baseColor = '#FF6B6B';
+        else if (btn.label === 'twoPlayers') btn.baseColor = '#333';
+
+        if (['1', '2', '3', '4'].includes(btn.label)) {
+            if (parseInt(btn.label) === currentLevel) btn.baseColor = '#FFD700';
+            else btn.baseColor = '#555';
+        }
+
+        if (btn.label === 'startGame') {
+            btn.baseColor = '#FFFFFF';
+            // Start button text color flip
+        }
+
+        btn.draw(ctx);
+
+        // Custom text color for buttons if needed
+        // (Handled effectively by draw method logic, but Start button needs black text if white bg)
+        if (btn.label === 'startGame') {
+            ctx.fillStyle = '#000000';
+            ctx.fillText(t(btn.label), btn.x + btn.width / 2, btn.y + btn.height / 2);
+        }
     });
 
-    // 更新並繪製火花
-    sparks = sparks.filter(spark => {
-        spark.update();
-        spark.draw();
-        return !spark.isDead();
+    const col1X = canvas.width * 0.20;
+    const col2X = canvas.width * 0.50;
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillText(t('selectMode'), col1X, canvas.height * 0.65 - 40);
+    ctx.fillText(t('selectLevel'), col2X, canvas.height * 0.65 - 40);
+
+    // Draw cursor/trail for feedback
+    players.forEach(p => {
+        if (p.gestureTrail.length > 0) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 5;
+            ctx.moveTo(p.gestureTrail[0].x, p.gestureTrail[0].y);
+            for (let i = 1; i < p.gestureTrail.length; i++) {
+                ctx.lineTo(p.gestureTrail[i].x, p.gestureTrail[i].y);
+            }
+            ctx.stroke();
+        }
     });
+}
 
-    // 繪製進入點指示器
-    if (cuttingState.entryPoint && cuttingState.isInside) {
-        // 外圈（發光效果）
-        const gradient = ctx.createRadialGradient(
-            cuttingState.entryPoint.x, cuttingState.entryPoint.y, 0,
-            cuttingState.entryPoint.x, cuttingState.entryPoint.y, 20
-        );
-        gradient.addColorStop(0, '#FFD700');
-        gradient.addColorStop(0.5, '#FFD70080');
-        gradient.addColorStop(1, '#FFD70000');
+function startGame(level) {
+    // Start Level
+    console.log(`Starting Level ${level} in ${gameMode} mode`);
+    currentLevel = parseInt(level);
 
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(cuttingState.entryPoint.x, cuttingState.entryPoint.y, 20, 0, Math.PI * 2);
-        ctx.fill();
+    // Hide start screen (if we still had one, now it's all canvas)
+    const startScreen = document.getElementById('startScreen');
+    if (startScreen) startScreen.classList.add('hidden');
 
-        // 核心點
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(cuttingState.entryPoint.x, cuttingState.entryPoint.y, 8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 白色中心
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.arc(cuttingState.entryPoint.x, cuttingState.entryPoint.y, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 標籤 A
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 16px Arial';
-        ctx.fillText('A', cuttingState.entryPoint.x + 15, cuttingState.entryPoint.y - 15);
+    // Show UI overlays
+    document.getElementById('p1UI').style.display = 'flex';
+    if (gameMode === 'multi') {
+        document.getElementById('p2UI').style.display = 'flex';
     }
 
-    // 繪製切割路徑預覽
-    if (cuttingState.isInside && cuttingState.currentPath.length > 1) {
-        ctx.strokeStyle = 'rgba(255, 215, 0, 0.8)';
+    // Setup camera if not already done
+    if (!camera) {
+        setupCamera(); // Await not needed here, initGame will wait for camera to be ready
+    }
+
+    // Initialize game
+    initGame();
+}
+
+function update() {
+    if (gameState === 'idle') {
+        // Ensure menu is initialized
+        if (menuButtons.length === 0) initMenu();
+        updateMenu();
+
+        // Update particles (explosions from buttons)
+        players.forEach(p => {
+            p.sparks.forEach(s => s.update());
+            p.sparks = p.sparks.filter(s => !s.isDead());
+        });
+
+    } else if (gameState === 'playing') {
+        // Update and render each player
+        players.forEach(player => {
+            // Update falling pieces
+            player.fallingPieces = player.fallingPieces.filter(piece => {
+                piece.update();
+                return !piece.isOffScreen();
+            });
+
+            // Update sparks
+            player.sparks = player.sparks.filter(spark => {
+                spark.update();
+                return !spark.isDead();
+            });
+
+            // Update bombs
+            player.bombs.forEach(bomb => {
+                bomb.update();
+
+                // Check collision with shape edges
+                if (player.shape) {
+                    const collision = bomb.checkEdgeCollision(player.shape);
+                    if (collision) {
+                        bomb.bounce(collision);
+                    }
+                }
+
+                // Check if bomb goes off-screen
+                if (bomb.x < player.viewport.x || bomb.x > player.viewport.x + player.viewport.width ||
+                    bomb.y < player.viewport.y || bomb.y > player.viewport.y + player.viewport.height) {
+                    // Wrap around or remove
+                    // For simplicity, just keep it (it will bounce back)
+                }
+            });
+        });
+
+        // Check win conditions periodically
+        checkWinConditions();
+    }
+}
+
+// ============================================================================
+// End Level Logic
+// ============================================================================
+function endLevel() {
+    gameState = 'finished_level';
+    timerActive = false;
+    if (gameTimer) clearInterval(gameTimer);
+
+    console.log('[END LEVEL] Evaluating results...');
+
+    if (gameMode === 'multi') {
+        // Two-player mode: Calculate WINs
+        const p1 = players[0];
+        const p2 = players[1];
+
+        // Calculate final percentages
+        p1.finalPercent = p1.shape ? (p1.shape.getArea() / p1.initialArea) * 100 : 100;
+        p2.finalPercent = p2.shape ? (p2.shape.getArea() / p2.initialArea) * 100 : 100;
+
+        // Reset per-level wins
+        p1.wins = 0;
+        p2.wins = 0;
+
+        // WIN Criterion 1: Closer to target percentage
+        const p1Diff = Math.abs(p1.finalPercent - targetPercent);
+        const p2Diff = Math.abs(p2.finalPercent - targetPercent);
+
+        if (p1Diff < p2Diff) {
+            p1.wins += 1;
+            console.log('[WIN] P1 +1 (closer to target)');
+        } else if (p2Diff < p1Diff) {
+            p2.wins += 1;
+            console.log('[WIN] P2 +1 (closer to target)');
+        }
+        // If equal, no one gets the WIN
+
+        // WIN Criterion 2: More time remaining (completion time)
+        // If both completed, whoever has lower completionTime wins
+        // If one didn't complete, other gets WIN
+        if (p1.completed && !p2.completed) {
+            p1.wins += 1;
+            console.log('[WIN] P1 +1 (completed, P2 did not)');
+        } else if (p2.completed && !p1.completed) {
+            p2.wins += 1;
+            console.log('[WIN] P2 +1 (completed, P1 did not)');
+        } else if (p1.completed && p2.completed) {
+            // Both completed, check who was faster
+            if (p1.completionTime < p2.completionTime) {
+                p2.wins += 1; // Lower time = more time remaining = WIN
+                console.log('[WIN] P2 +1 (more time remaining)');
+            } else if (p2.completionTime < p1.completionTime) {
+                p1.wins += 1;
+                console.log('[WIN] P1 +1 (more time remaining)');
+            }
+        }
+
+        // Update total WINs
+        p1TotalWins += p1.wins;
+        p2TotalWins += p2.wins;
+
+        console.log(`[WINS] P1: +${p1.wins} (Total: ${p1TotalWins}), P2: +${p2.wins} (Total: ${p2TotalWins})`);
+
+        // Update WIN displays immediately
+        updateUI();
+
+        // Show WIN message
+        let message = `Level ${currentLevel} Complete!\\n`;
+        message += `P1: ${p1.finalPercent.toFixed(1)}% (+${p1.wins} WIN)\\n`;
+        message += `P2: ${p2.finalPercent.toFixed(1)}% (+${p2.wins} WIN)`;
+        showMessage(message);
+
+        if (audioCtrl) audioCtrl.playWin();
+
+        // After level 4: Show final results
+        if (currentLevel === 4) {
+            setTimeout(() => {
+                showFinalResults();
+            }, 3000);
+        } else {
+            // Proceed to next level
+            setTimeout(() => {
+                currentLevel++;
+                initGame();
+            }, 3000);
+        }
+
+    } else {
+        // Single-player mode
+        const player = players[0];
+        const currentArea = player.shape ? player.shape.getArea() : 0;
+        const percent = player.initialArea > 0 ? (currentArea / player.initialArea) * 100 : 100;
+
+        let success = false;
+        let message = '';
+
+        if (currentLevel === 4) {
+            // Level 4: Must be within range
+            if (percent >= minTargetPercent && percent <= maxTargetPercent) {
+                success = true;
+                message = t('gameComplete', { min: minTargetPercent, max: maxTargetPercent });
+            } else {
+                message = t('timeUp');
+            }
+        } else {
+            // Other levels: Must reach target
+            if (percent <= targetPercent) {
+                success = true;
+                const levelKey = `levelComplete${currentLevel}`;
+                message = t(levelKey);
+            } else {
+                message = t('timeUp');
+            }
+        }
+
+        if (success && audioCtrl) audioCtrl.playWin();
+        if (!success && audioCtrl) audioCtrl.playExplosion(); // Fail sound
+
+        showMessage(message);
+
+        if (success) {
+            if (currentLevel === 4) {
+                // Game complete
+                setTimeout(() => {
+                    resetToStartScreen();
+                }, 3000);
+            } else {
+                // Next level
+                setTimeout(() => {
+                    currentLevel++;
+                    initGame();
+                }, 3000);
+            }
+        } else {
+            // Game over
+            setTimeout(() => {
+                resetToStartScreen();
+            }, 3000);
+        }
+    }
+}
+
+// ============================================================================
+// Final Results Screen (Two-Player Mode)
+// ============================================================================
+function showFinalResults() {
+    let message = `${t('gameOver')}\\n\\n`;
+
+    if (p1TotalWins > p2TotalWins) {
+        message += t('player1Wins') + '\\n';
+    } else if (p2TotalWins > p1TotalWins) {
+        message += t('player2Wins') + '\\n';
+    } else {
+        message += t('draw') + '\\n';
+    }
+
+    message += `${t('finalScore')}: ${p1TotalWins} - ${p2TotalWins}`;
+
+    showMessage(message);
+
+    // Return to start screen after 5 seconds
+    setTimeout(() => {
+        resetToStartScreen();
+    }, 5000);
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+function showMessage(text) {
+    console.log('[MESSAGE]', text);
+    const msgEl = document.getElementById('gameMessage');
+    if (msgEl) {
+        msgEl.innerText = text; // Use innerText to handle \n newlines
+        msgEl.classList.remove('hidden');
+
+        // Auto-hide after 2.5 seconds (slightly longer for reading)
+        setTimeout(() => {
+            msgEl.classList.add('hidden');
+        }, 2500);
+    }
+}
+
+function resetToStartScreen() {
+    console.log('[RESET] Returning to start screen');
+    gameState = 'idle';
+    currentLevel = 1;
+    p1TotalWins = 0;
+    p2TotalWins = 0;
+    players = [];
+    timerActive = false;
+
+    // Stop any active timer
+    if (gameTimer) clearInterval(gameTimer);
+
+    // Hide In-Game UI
+    const p1UI = document.getElementById('p1UI');
+    if (p1UI) p1UI.style.display = 'none'; // Check css if this should be hidden or just empty
+
+    const p2UI = document.getElementById('p2UI');
+    if (p2UI) p2UI.style.display = 'none';
+
+    const timerBox = document.getElementById('timerBox');
+    if (timerBox) timerBox.style.display = 'none';
+
+    const splitLine = document.getElementById('splitLine');
+    if (splitLine) splitLine.style.display = 'none';
+
+    // Ensure message is hidden
+    const msgEl = document.getElementById('gameMessage');
+    if (msgEl) msgEl.classList.add('hidden');
+
+    // Show start screen
+    const startScreen = document.getElementById('startScreen');
+    if (startScreen) startScreen.classList.remove('hidden'); // Use remove('hidden') to show
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function createExplosion(x, y, player) {
+    // Visual explosion effect only (does not end game)
+    for (let i = 0; i < 20; i++) {
+        player.sparks.push(new Spark(x, y));
+    }
+    if (audioCtrl) audioCtrl.playCut();
+}
+
+function triggerExplosion(x, y, player) {
+    console.log('[EXPLOSION] Bomb exploded!');
+
+    // Create explosion sparks
+    for (let i = 0; i < 30; i++) {
+        player.sparks.push(new Spark(x, y));
+    }
+
+    // Play explosion sound
+    if (audioCtrl) audioCtrl.playExplosion();
+
+    if (gameMode === 'multi') {
+        // Two-player mode: Reset ONLY the player who hit the bomb
+        console.log(`[BOMB] Player ${player.id + 1} hit bomb! Resetting shape...`);
+
+        // Reset shape
+        createShapeForPlayer(player);
+
+        // Reset cutting state
+        player.cuttingState = {
+            isInside: false,
+            entryPoint: null,
+            currentPath: [],
+            lastPosition: null
+        };
+
+        // Show warning message
+        showMessage(t('bombExplosion')); // "Bomb exploded!"
+
+    } else {
+        // Single-player mode: Game Over
+        gameState = 'lost';
+        showMessage(t('bombExplosion'));
+
+        setTimeout(() => {
+            resetToStartScreen();
+        }, 2000);
+    }
+}
+
+function createShapeForPlayer(player) {
+    const centerX = player.viewport.x + player.viewport.width / 2;
+    const centerY = player.viewport.y + player.viewport.height / 2;
+    const size = Math.min(player.viewport.width, player.viewport.height) * 0.6;
+
+    switch (currentLevel) {
+        case 1:
+            player.shape = createLevel1Shape(centerX, centerY, size);
+            break;
+        case 2:
+            player.shape = createStarPolygon(centerX, centerY, size / 2, size / 4);
+            break;
+        case 3:
+            player.shape = createLevel3Shape(centerX, centerY, size);
+            break;
+        case 4:
+            player.shape = createLevel4Shape(centerX, centerY, size / 2);
+            break;
+    }
+
+    // Update initial area for percentage calculation
+    // Note: If resetting, do we reset the initial area reference? 
+    // Usually yes, if we want them to start over completely.
+    player.initialArea = player.shape.getArea();
+}
+
+// ============================================================================
+// Audio Controller - Synthesized Sounds (Web Audio API)
+// ============================================================================
+class AudioController {
+    constructor() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.initialized = false;
+        this.enabled = true;
+    }
+
+    init() {
+        if (!this.initialized) {
+            this.ctx.resume().then(() => {
+                this.initialized = true;
+                console.log('[AUDIO] Context resumed');
+            });
+        }
+    }
+
+    // Helper: Create oscillator tone
+    playTone(freq, type, duration, startTime = 0, vol = 0.1) {
+        if (!this.enabled) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime + startTime);
+
+        gain.gain.setValueAtTime(vol, this.ctx.currentTime + startTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + startTime + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(this.ctx.currentTime + startTime);
+        osc.stop(this.ctx.currentTime + startTime + duration);
+    }
+
+    // Helper: Create noise buffer (for explosions)
+    createNoiseBuffer() {
+        const bufferSize = this.ctx.sampleRate * 2; // 2 seconds
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        return buffer;
+    }
+
+    // Sound: Cut (High pitch swipe)
+    playCut() {
+        if (!this.enabled) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.1);
+
+        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.1);
+    }
+
+    // Sound: Blocked/Error (Low thud)
+    playBlocked() {
+        this.playTone(150, 'square', 0.15, 0, 0.1);
+    }
+
+    // Sound: Explosion (Noise burst)
+    playExplosion() {
+        if (!this.enabled) return;
+
+        const bufferSize = this.ctx.sampleRate * 0.5;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+
+        noise.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start();
+    }
+
+    // Sound: Level Complete (Victory jingle)
+    playWin() {
+        // C Major Arpeggio: C4, E4, G4, C5
+        this.playTone(261.63, 'sine', 0.1, 0.0);
+        this.playTone(329.63, 'sine', 0.1, 0.1);
+        this.playTone(392.00, 'sine', 0.1, 0.2);
+        this.playTone(523.25, 'sine', 0.4, 0.3, 0.2);
+    }
+}
+
+let audioCtrl;
+
+// Initialize audio system
+function initAudio() {
+    audioCtrl = new AudioController();
+
+    // Add interaction listener to resume context
+    document.body.addEventListener('click', () => {
+        audioCtrl.init();
+    }, { once: true });
+
+    // Map legacy functions to new system
+    collisionSound = () => audioCtrl.playBlocked();
+    explosionSound = () => audioCtrl.playExplosion();
+
+    console.log('[AUDIO] AudioController initialized');
+}
+
+
+// ============================================================================
+// Part 6: Game Loop, Rendering, and Startup
+// ============================================================================
+
+// ============================================================================
+// Render Player Viewport
+// ============================================================================
+function renderPlayerViewport(player) {
+    // Clip rendering to player's viewport
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(player.viewport.x, player.viewport.y, player.viewport.width, player.viewport.height);
+    ctx.clip();
+
+    // Draw shape
+    if (player.shape) {
+        const shapeColor = player.id === 0 ? '#4ECDC4' : '#A78BFA'; // P1 cyan, P2 purple
+        player.shape.draw(shapeColor, 4, '#000000');
+    }
+
+    // Draw cutting path preview
+    if (player.cuttingState.currentPath.length > 1) {
+        ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = 3;
         ctx.setLineDash([10, 5]);
         ctx.beginPath();
-        ctx.moveTo(cuttingState.currentPath[0].x, cuttingState.currentPath[0].y);
-        for (let i = 1; i < cuttingState.currentPath.length; i++) {
-            ctx.lineTo(cuttingState.currentPath[i].x, cuttingState.currentPath[i].y);
+        ctx.moveTo(player.cuttingState.currentPath[0].x, player.cuttingState.currentPath[0].y);
+        for (let i = 1; i < player.cuttingState.currentPath.length; i++) {
+            ctx.lineTo(player.cuttingState.currentPath[i].x, player.cuttingState.currentPath[i].y);
         }
         ctx.stroke();
         ctx.setLineDash([]);
-    }
 
-    // 繪製手勢軌跡（舊功能，保留）
-    if (gestureTrail.length > 1) {
-        ctx.strokeStyle = 'rgba(255, 107, 107, 0.5)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(gestureTrail[0].x, gestureTrail[0].y);
-        for (let i = 1; i < gestureTrail.length; i++) {
-            ctx.lineTo(gestureTrail[i].x, gestureTrail[i].y);
+        // Draw entry point marker
+        if (player.cuttingState.entryPoint) {
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText('A', player.cuttingState.entryPoint.x - 8, player.cuttingState.entryPoint.y + 8);
         }
-        ctx.stroke();
     }
 
+    // Draw falling pieces
+    player.fallingPieces.forEach(piece => piece.draw());
+
+    // Draw sparks
+    player.sparks.forEach(spark => spark.draw());
+
+    // Draw bombs
+    player.bombs.forEach(bomb => bomb.draw());
+
+    // Draw FINISH overlay if completed
+    if (player.completed) {
+        // Semi-transparent background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(player.viewport.x, player.viewport.y, player.viewport.width, player.viewport.height);
+
+        // FINISH text
+        ctx.save();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 48px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 10;
+        ctx.fillText("FINISH", player.viewport.x + player.viewport.width / 2, player.viewport.y + player.viewport.height / 2);
+        ctx.restore();
+    }
+
+    ctx.restore();
+}
+
+// ============================================================================
+// Main Draw Function
+// ============================================================================
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (gameState === 'idle') {
+        drawMenu();
+        // Draw particles
+        players.forEach(p => {
+            p.sparks.forEach(s => s.draw());
+        });
+    } else {
+        // Draw split line if multi
+        if (gameMode === 'multi') {
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        }
+
+        // Draw players
+        players.forEach(p => renderPlayerViewport(p));
+    }
+}
+
+// ============================================================================
+// Game Loop - Main Update and Render
+// ============================================================================
+function gameLoop() {
+    update();
+    draw();
     requestAnimationFrame(gameLoop);
 }
 
 // ============================================================================
-// 啟動遊戲
+// Check Win Conditions
 // ============================================================================
+function checkWinConditions() {
+    if (gameMode === 'multi') {
+        // Two-player: check if both completed or timer expired
+        // Timer is handled separately in startTimer()
 
-// 關卡選擇按鈕
-document.querySelectorAll('.level-btn').forEach(btn => {
-    btn.addEventListener('click', function () {
-        // 移除其他按鈕的選中狀態
-        document.querySelectorAll('.level-btn').forEach(b => b.classList.remove('selected'));
+        // Check if individual player reached target
+        players.forEach(player => {
+            if (!player.completed && player.shape && player.initialArea > 0) {
+                const currentArea = player.shape.getArea();
+                const percent = (currentArea / player.initialArea) * 100;
 
-        // 添加當前按鈕的選中狀態
-        this.classList.add('selected');
+                if (percent <= targetPercent) {
+                    player.completed = true;
+                    player.completionTime = 60 - timeRemaining; // Time taken
+                    console.log(`[PLAYER ${player.id + 1}] Completed! Time: ${player.completionTime}s, Percent: ${percent.toFixed(1)}%`);
+                }
+            }
+        });
 
-        // 設置選擇的關卡
-        selectedLevel = parseInt(this.dataset.level);
-        console.log(`已選擇關卡 ${selectedLevel}`);
-    });
-});
+        // If both completed, end level immediately
+        if (players.every(p => p.completed)) {
+            console.log('[TWO-PLAYER] Both players completed!');
+            endLevel();
+        }
 
-// 默認選中關卡 1
-document.querySelector('.level-btn[data-level="1"]').classList.add('selected');
+    } else {
+        // Single-player: check target reached
+        const player = players[0];
+        if (!player.shape || player.initialArea === 0) return;
 
-document.getElementById('startButton').addEventListener('click', async () => {
-    console.log("Game Version: v2.6");
+        const currentArea = player.shape.getArea();
+        const percent = (currentArea / player.initialArea) * 100;
+
+        let shouldEnd = false;
+
+        if (currentLevel === 4) {
+            // Level 4: Within range
+            if (percent >= minTargetPercent && percent <= maxTargetPercent) {
+                shouldEnd = true;
+            }
+        } else {
+            // Other levels: Below target
+            if (percent <= targetPercent) {
+                shouldEnd = true;
+            }
+        }
+
+        if (shouldEnd) {
+            player.completed = true;
+            endLevel();
+        }
+
+        // Check if area too small
+        if (percent < 1) {
+            gameState = 'lost';
+            showMessage(t('areaTooSmall', { percent: percent.toFixed(1) }));
+            setTimeout(() => resetToStartScreen(), 2000);
+        }
+    }
+}
+
+// ============================================================================
+// Camera Setup
+// ============================================================================
+async function setupCamera() {
     try {
-        document.getElementById('startScreen').classList.add('hidden');
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: 'environment', // Use back camera on mobile
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
+        });
 
-        // 使用選擇的關卡
-        currentLevel = selectedLevel;
-        console.log(`開始遊戲，當前關卡: ${currentLevel}`);
+        video.srcObject = stream;
+        await video.play();
 
-        // 初始化音效
-        initAudio();
-
-        // 設置 MediaPipe
-        setupMediaPipe();
-
-        // 啟動攝像頭（移動設備優化）
-        // 使用前置攝像頭，讓玩家可以看到自己
         camera = new Camera(video, {
             onFrame: async () => {
                 await hands.send({ image: video });
             },
             width: 1280,
-            height: 720,
-            facingMode: 'user' // 使用前置攝像頭
+            height: 720
         });
 
         await camera.start();
-
-        // 初始化遊戲
-        initGame();
-
-        // 開始遊戲循環
-        gameLoop();
+        console.log('[CAMERA] Started successfully');
     } catch (error) {
-        console.error('啟動失敗:', error);
-        showMessage('⚠️ 無法訪問攝像頭，請允許權限');
-        document.getElementById('startScreen').classList.remove('hidden');
+        console.error('[CAMERA ERROR]', error);
+        showMessage(t('cameraError'));
+    }
+}
+
+// ============================================================================
+// Event Handlers for UI Buttons
+// ============================================================================
+
+// Mode selection
+document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        gameMode = e.target.dataset.mode;
+        console.log('[MODE] Selected:', gameMode);
+
+        // Update UI selection
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+        e.target.classList.add('selected');
+    });
+});
+
+// Level selection
+document.querySelectorAll('.level-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        selectedLevel = parseInt(e.target.dataset.level);
+        currentLevel = selectedLevel;
+        console.log('[LEVEL] Selected level:', currentLevel);
+
+        // Highlight selected button
+        document.querySelectorAll('.level-btn').forEach(b => b.classList.remove('selected'));
+        e.target.classList.add('selected');
+    });
+});
+
+// Permission Button Logic
+document.getElementById('permissionBtn')?.addEventListener('click', async () => {
+    console.log('[PERMISSION] User clicked start...');
+
+    // Hide overlay
+    document.getElementById('permissionOverlay').style.display = 'none';
+
+    // Initialize Audio (requires interaction)
+    initAudio();
+    if (audioCtrl) audioCtrl.init();
+
+    // Initialize Camera
+    if (!camera) {
+        await setupCamera();
     }
 });
+
+// Start game button (legacy or internal use)
+document.getElementById('startButton')?.addEventListener('click', async () => {
+    console.log('[START] Starting game...');
+
+    // Hide start screen
+    document.getElementById('startScreen').style.display = 'none';
+
+    // Initialize game
+    initGame();
+});
+
+// Language toggle
+document.getElementById('langSwitch')?.addEventListener('click', () => {
+    currentLanguage = currentLanguage === 'zh' ? 'en' : 'zh';
+    updateLanguage(currentLanguage);
+    console.log('[LANGUAGE] Switched to:', currentLanguage);
+});
+
+// ============================================================================
+// Startup Initialization
+// ============================================================================
+console.log('[STARTUP] Initializing game systems...');
+
+// Setup MediaPipe
+console.log('[1] Setting up MediaPipe...');
+setupMediaPipe();
+console.log('[MEDIAPIPE] Setup complete');
+
+// Initialize audio
+console.log('[2] Initializing audio...');
+initAudio();
+console.log('[AUDIO] Initialized');
+
+// Start game loop
+console.log('[3] Starting game loop...');
+gameLoop();
+console.log('[GAME LOOP] Started');
+
+console.log('[STARTUP] All systems initialized! Ready to play.');
+
+

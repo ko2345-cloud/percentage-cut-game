@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 
 <head>
@@ -20,44 +20,83 @@
         <!-- 遊戲畫布 -->
         <canvas id="gameCanvas"></canvas>
 
-        <!-- UI 覆蓋層 -->
-        <div class="ui-overlay">
+        <!-- Version Display (Persistent) -->
+        <div class="version-display">v3.13</div>
+
+        <!-- Split Screen Divider -->
+        <div class="split-screen-line" id="splitLine"></div>
+
+        <!-- UI 覆蓋層 P1 -->
+        <div class="ui-overlay p1-ui" id="p1UI">
+            <div class="player-label">P1</div>
             <div class="stat-box">
-                <div class="stat-label">關卡</div>
-                <div class="stat-value" id="levelDisplay">1</div>
+                <div class="stat-label" data-i18n="level">關卡</div>
+                <div class="stat-value" id="p1-levelDisplay">1</div>
             </div>
             <div class="stat-box">
-                <div class="stat-label">目標</div>
-                <div class="stat-value" id="targetPercent">10%</div>
+                <div class="stat-label" data-i18n="target">目標</div>
+                <div class="stat-value" id="p1-targetPercent">10%</div>
             </div>
             <div class="stat-box">
-                <div class="stat-label">目前面積</div>
-                <div class="stat-value" id="currentPercent">100%</div>
+                <div class="stat-label" data-i18n="currentArea">目前面積</div>
+                <div class="stat-value" id="p1-currentPercent">100%</div>
             </div>
-            <div class="stat-box" id="timerBox" style="display: none;">
-                <div class="stat-label">剩餘時間</div>
-                <div class="stat-value" id="timerDisplay">30</div>
+            <div class="stat-box" id="p1-winsBox" style="display: none;">
+                <div class="stat-label" data-i18n="wins">Win</div>
+                <div class="stat-value" id="p1-wins">0</div>
             </div>
         </div>
+
+        <!-- UI 覆蓋層 P2 (雙人模式顯示) -->
+        <div class="ui-overlay p2-ui" id="p2UI" style="display: none; left: auto; right: 20px;">
+            <div class="player-label">P2</div>
+            <div class="stat-box">
+                <div class="stat-label" data-i18n="level">關卡</div>
+                <div class="stat-value" id="p2-levelDisplay">1</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label" data-i18n="target">目標</div>
+                <div class="stat-value" id="p2-targetPercent">10%</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label" data-i18n="currentArea">目前面積</div>
+                <div class="stat-value" id="p2-currentPercent">100%</div>
+            </div>
+            <div class="stat-box" id="p2-winsBox" style="display: none;">
+                <div class="stat-label" data-i18n="wins">Win</div>
+                <div class="stat-value" id="p2-wins">0</div>
+            </div>
+        </div>
+
+        <!-- Shared Timer (Top Center) -->
+        <div class="stat-box" id="timerBox"
+            style="display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 20;">
+            <div class="stat-label" data-i18n="timeRemaining">剩餘時間</div>
+            <div class="stat-value" id="timerDisplay">60</div>
+        </div>
+
+        <!-- Language Switcher -->
+        <button id="langSwitch" class="lang-switch">EN / 中文</button>
 
         <!-- 遊戲狀態訊息 -->
         <div id="gameMessage" class="game-message hidden"></div>
 
         <!-- 開始按鈕 -->
         <div id="startScreen" class="start-screen">
-            <h1>切割遊戲 - Percentage Cut</h1>
-            <p>用雙手切割圖案，將面積減少到目標百分比！</p>
-            <p style="font-size: 14px; color: #aaa; margin-top: 5px;">v2.6</p>
-            <div class="level-selector">
-                <p style="font-size: 16px; margin-bottom: 10px; opacity: 0.8;">選擇關卡：</p>
-                <div class="level-buttons">
-                    <button class="level-btn" data-level="1">關卡 1</button>
-                    <button class="level-btn" data-level="2">關卡 2</button>
-                    <button class="level-btn" data-level="3">關卡 3</button>
-                    <button class="level-btn" data-level="4">關卡 4</button>
-                </div>
-            </div>
-            <button id="startButton">開始遊戲</button>
+            <h1 data-i18n="gameTitle">切割遊戲 - Percentage Cut</h1>
+            <p data-i18n="gameInstructions">用單手切割圖案，將面積減少到目標百分比！</p>
+            <br><br><br>
+            <p style="font-size: 18px; color: #eee; margin-top: 20px;">Use your hand to cut the buttons below!</p>
+        </div>
+    </div>
+
+    <!-- Permission Overlay (Click to Start) -->
+    <div id="permissionOverlay" class="permission-overlay">
+        <div class="permission-content">
+            <h1>歡迎 / Welcome</h1>
+            <p>請點擊下方按鈕以啟用相機和音效權限</p>
+            <p style="font-size: 14px; opacity: 0.8">Please click to enable camera and audio access</p>
+            <button id="permissionBtn" class="permission-btn">進入遊戲 / Enter Game</button>
         </div>
     </div>
 
@@ -68,7 +107,7 @@
         crossorigin="anonymous"></script>
 
     <!-- 遊戲腳本 -->
-    <script src="script.js?v=2.6"></script>
+    <script src="script.js?v=3.13"></script>
 </body>
 
 </html>

@@ -35,7 +35,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.1);
+    background: transparent;
 }
 
 /* UI 覆蓋層 - 移到左側垂直排列 */
@@ -56,6 +56,15 @@ body {
         left: 10px;
         gap: 12px;
     }
+}
+
+.player-label {
+    font-size: 24px;
+    font-weight: 800;
+    color: white;
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+    text-align: center;
+    margin-bottom: 5px;
 }
 
 /* 統計框基礎樣式 */
@@ -205,14 +214,18 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: transparent;
+    /* Semi-transparent to see canvas */
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
+    /* Align to top to leave space for buttons */
     align-items: center;
     padding: 20px;
     z-index: 200;
     color: white;
+    pointer-events: none;
+    /* Let clicks/gestures pass through to canvas if needed, though we use webcam */
 }
 
 .start-screen.hidden {
@@ -298,6 +311,78 @@ body {
     transform: translateY(-1px);
 }
 
+/* Mode Selector */
+.mode-selector {
+    margin-bottom: 20px;
+}
+
+.mode-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.mode-btn {
+    padding: 12px 30px;
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(5px);
+}
+
+.mode-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.mode-btn.selected {
+    background: rgba(78, 205, 196, 0.8);
+    border-color: #4ECDC4;
+    color: #333;
+}
+
+/* Split Screen UI */
+.split-screen-line {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 4px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: translateX(-50%);
+    z-index: 5;
+    pointer-events: none;
+    display: none;
+}
+
+.player-info {
+    position: absolute;
+    top: 20px;
+    padding: 10px 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 20px;
+    color: white;
+    font-weight: bold;
+    z-index: 20;
+    display: none;
+}
+
+.p1-info {
+    left: 25%;
+    transform: translateX(-50%);
+}
+
+.p2-info {
+    right: 25%;
+    transform: translateX(50%);
+}
+
 /* Level Selector */
 .level-selector {
     margin: 30px 0;
@@ -358,4 +443,81 @@ body {
     pointer-events: none;
     z-index: 150;
     animation: flash 0.5s ease-out;
+}
+
+/* Permission Overlay */
+.permission-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    backdrop-filter: blur(10px);
+}
+
+.permission-content {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    color: white;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.permission-btn {
+    background: linear-gradient(45deg, #4ECDC4, #556270);
+    border: none;
+    padding: 15px 40px;
+    margin-top: 20px;
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.permission-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(78, 205, 196, 0.4);
+}
+
+/* Language Switcher */
+.lang-switch {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 20px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.lang-switch:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+/* Version Display */
+.version-display {
+    position: absolute;
+    bottom: 10px;
+    right: 15px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.5);
+    z-index: 1000;
+    pointer-events: none;
+    font-family: monospace;
 }
