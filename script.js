@@ -1,7 +1,8 @@
 // ============================================================================
-// Game: Percentage Cut - v3.13
+// Game: Percentage Cut - v3.18
 // Description: Use hand gestures to cut shapes to target percentages
 // ============================================================================
+
 
 // ============================================================================
 // Translations - Bilingual Support (Chinese/English)
@@ -129,6 +130,7 @@ let timerActive = false;
 // Two-player WIN tracking
 let p1TotalWins = 0;
 let p2TotalWins = 0;
+let levelResults = []; // e.g., [{level: 1, p1Data: "2 WINS", p2Data: ""}, ...]
 
 // Sound effects (placeholders)
 let collisionSound = null;
@@ -368,10 +370,19 @@ class Polygon {
             }
         }
 
-        // Need exactly 2 intersection points to slice
-        if (intersections.length !== 2) return null;
+        // Need at least 2 intersection points to slice
+        if (intersections.length < 2) return null;
 
-        const [int1, int2] = intersections;
+        // Sort intersections by distance from lineStart
+        intersections.sort((a, b) => {
+            const distA = (a.point.x - lineStart.x) ** 2 + (a.point.y - lineStart.y) ** 2;
+            const distB = (b.point.x - lineStart.x) ** 2 + (b.point.y - lineStart.y) ** 2;
+            return distA - distB;
+        });
+
+        // Use the first and last intersections (Logic: Cut through everything in path)
+        const int1 = intersections[0];
+        const int2 = intersections[intersections.length - 1];
         const poly1Vertices = [];
         const poly1Edges = [];
         const poly2Vertices = [];
@@ -1062,13 +1073,15 @@ function resolveCut(pieces, startPt, endPt, player) {
 
     console.log(`[CUT SUCCESS] Area 1: ${area1.toFixed(2)}, Area 2: ${area2.toFixed(2)}`);
 
-    // Smaller piece falls away
+    // Larger piece falls away (User Request)
     if (area1 < area2) {
-        player.shape = poly2;
-        player.fallingPieces.push(new FallingPiece(poly1));
-    } else {
+        // Area 2 is larger -> Keep Area 1 (Small), Fall Area 2 (Large)
         player.shape = poly1;
         player.fallingPieces.push(new FallingPiece(poly2));
+    } else {
+        // Area 1 is larger -> Keep Area 2 (Small), Fall Area 1 (Large)
+        player.shape = poly2;
+        player.fallingPieces.push(new FallingPiece(poly1));
     }
 
     // Create sparks
@@ -1682,64 +1695,70 @@ function endLevel() {
     console.log('[END LEVEL] Evaluating results...');
 
     if (gameMode === 'multi') {
-        // Two-player mode: Calculate WINs
         const p1 = players[0];
         const p2 = players[1];
 
-        // Calculate final percentages
+        // Store result for this level
+        const currentLevelResult = {
+            level: currentLevel,
+            p1Data: "",
+            p2Data: ""
+        };
+
         p1.finalPercent = p1.shape ? (p1.shape.getArea() / p1.initialArea) * 100 : 100;
         p2.finalPercent = p2.shape ? (p2.shape.getArea() / p2.initialArea) * 100 : 100;
 
-        // Reset per-level wins
-        p1.wins = 0;
-        p2.wins = 0;
+        let p1LevelWins = 0;
+        let p2LevelWins = 0;
 
         // WIN Criterion 1: Closer to target percentage
         const p1Diff = Math.abs(p1.finalPercent - targetPercent);
         const p2Diff = Math.abs(p2.finalPercent - targetPercent);
 
         if (p1Diff < p2Diff) {
-            p1.wins += 1;
+            p1LevelWins += 1;
             console.log('[WIN] P1 +1 (closer to target)');
         } else if (p2Diff < p1Diff) {
-            p2.wins += 1;
+            p2LevelWins += 1;
             console.log('[WIN] P2 +1 (closer to target)');
         }
-        // If equal, no one gets the WIN
 
-        // WIN Criterion 2: More time remaining (completion time)
-        // If both completed, whoever has lower completionTime wins
-        // If one didn't complete, other gets WIN
+        // WIN Criterion 2: More time remaining / Completion
         if (p1.completed && !p2.completed) {
-            p1.wins += 1;
+            p1LevelWins += 1;
             console.log('[WIN] P1 +1 (completed, P2 did not)');
         } else if (p2.completed && !p1.completed) {
-            p2.wins += 1;
+            p2LevelWins += 1;
             console.log('[WIN] P2 +1 (completed, P1 did not)');
         } else if (p1.completed && p2.completed) {
-            // Both completed, check who was faster
             if (p1.completionTime < p2.completionTime) {
-                p2.wins += 1; // Lower time = more time remaining = WIN
+                p2LevelWins += 1;
                 console.log('[WIN] P2 +1 (more time remaining)');
             } else if (p2.completionTime < p1.completionTime) {
-                p1.wins += 1;
+                p1LevelWins += 1;
                 console.log('[WIN] P1 +1 (more time remaining)');
             }
         }
 
-        // Update total WINs
-        p1TotalWins += p1.wins;
-        p2TotalWins += p2.wins;
+        // Update Total Wins
+        p1TotalWins += p1LevelWins;
+        p2TotalWins += p2LevelWins;
 
-        console.log(`[WINS] P1: +${p1.wins} (Total: ${p1TotalWins}), P2: +${p2.wins} (Total: ${p2TotalWins})`);
+        // Store formatted string for table (e.g., "2 WINS", "1 WIN", or empty)
+        if (p1LevelWins > 0) {
+            currentLevelResult.p1Data = `${p1LevelWins} WIN${p1LevelWins > 1 ? 'S' : ''}`;
+        }
+        if (p2LevelWins > 0) {
+            currentLevelResult.p2Data = `${p2LevelWins} WIN${p2LevelWins > 1 ? 'S' : ''}`;
+        }
+        levelResults.push(currentLevelResult);
 
         // Update WIN displays immediately
         updateUI();
 
-        // Show WIN message
         let message = `Level ${currentLevel} Complete!\\n`;
-        message += `P1: ${p1.finalPercent.toFixed(1)}% (+${p1.wins} WIN)\\n`;
-        message += `P2: ${p2.finalPercent.toFixed(1)}% (+${p2.wins} WIN)`;
+        message += `P1: ${p1.finalPercent.toFixed(1)}% (+${p1LevelWins})\\n`;
+        message += `P2: ${p2.finalPercent.toFixed(1)}% (+${p2LevelWins})`;
         showMessage(message);
 
         if (audioCtrl) audioCtrl.playWin();
@@ -1816,22 +1835,37 @@ function endLevel() {
 // Final Results Screen (Two-Player Mode)
 // ============================================================================
 function showFinalResults() {
-    let message = `${t('gameOver')}\\n\\n`;
+    // Populate Results Table
+    const tbody = document.getElementById('resultsTableBody');
+    tbody.innerHTML = ''; // Clear previous
 
+    levelResults.forEach(res => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${t('level')} ${res.level}</td>
+            <td>${res.p1Data}</td>
+            <td>${res.p2Data}</td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    // Populate Winner
+    const winnerDisplay = document.getElementById('finalWinnerDisplay');
     if (p1TotalWins > p2TotalWins) {
-        message += t('player1Wins') + '\\n';
+        winnerDisplay.textContent = t('player1Wins').replace('!', ' !!!');
     } else if (p2TotalWins > p1TotalWins) {
-        message += t('player2Wins') + '\\n';
+        winnerDisplay.textContent = t('player2Wins').replace('!', ' !!!');
     } else {
-        message += t('draw') + '\\n';
+        winnerDisplay.textContent = t('draw');
     }
 
-    message += `${t('finalScore')}: ${p1TotalWins} - ${p2TotalWins}`;
-
-    showMessage(message);
+    // Show Screen
+    const resultsScreen = document.getElementById('finalResultsScreen');
+    if (resultsScreen) resultsScreen.classList.remove('hidden');
 
     // Return to start screen after 5 seconds
     setTimeout(() => {
+        if (resultsScreen) resultsScreen.classList.add('hidden');
         resetToStartScreen();
     }, 5000);
 }
@@ -1859,34 +1893,26 @@ function resetToStartScreen() {
     currentLevel = 1;
     p1TotalWins = 0;
     p2TotalWins = 0;
+    levelResults = []; // Reset tracked results
     players = [];
     timerActive = false;
 
-    // Stop any active timer
     if (gameTimer) clearInterval(gameTimer);
 
-    // Hide In-Game UI
-    const p1UI = document.getElementById('p1UI');
-    if (p1UI) p1UI.style.display = 'none'; // Check css if this should be hidden or just empty
+    document.getElementById('p1UI').style.display = 'none';
+    document.getElementById('p2UI').style.display = 'none';
+    document.getElementById('timerBox').style.display = 'none';
+    document.getElementById('splitLine').style.display = 'none';
 
-    const p2UI = document.getElementById('p2UI');
-    if (p2UI) p2UI.style.display = 'none';
-
-    const timerBox = document.getElementById('timerBox');
-    if (timerBox) timerBox.style.display = 'none';
-
-    const splitLine = document.getElementById('splitLine');
-    if (splitLine) splitLine.style.display = 'none';
-
-    // Ensure message is hidden
     const msgEl = document.getElementById('gameMessage');
     if (msgEl) msgEl.classList.add('hidden');
 
-    // Show start screen
+    // Ensure results screen is hidden if reset called manually
+    document.getElementById('finalResultsScreen')?.classList.add('hidden');
+
     const startScreen = document.getElementById('startScreen');
     if (startScreen) startScreen.classList.remove('hidden'); // Use remove('hidden') to show
 
-    // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
@@ -2251,9 +2277,18 @@ function checkWinConditions() {
         if (shouldEnd) {
             player.completed = true;
             endLevel();
+            return; // Exit immediately on WIN, don't check for "too small"
         }
 
         // Check if area too small
+        // Level 4: Fail if below minTargetPercent (10%)
+        if (currentLevel === 4 && percent < minTargetPercent) {
+            gameState = 'lost';
+            showMessage(t('areaTooSmall', { percent: percent.toFixed(1) }));
+            setTimeout(() => resetToStartScreen(), 2000);
+            return;
+        }
+
         if (percent < 1) {
             gameState = 'lost';
             showMessage(t('areaTooSmall', { percent: percent.toFixed(1) }));

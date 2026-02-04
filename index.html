@@ -21,7 +21,7 @@
         <canvas id="gameCanvas"></canvas>
 
         <!-- Version Display (Persistent) -->
-        <div class="version-display">v3.13</div>
+        <div class="version-display">v3.18</div>
 
         <!-- Split Screen Divider -->
         <div class="split-screen-line" id="splitLine"></div>
@@ -87,6 +87,24 @@
             <p data-i18n="gameInstructions">用單手切割圖案，將面積減少到目標百分比！</p>
             <br><br><br>
             <p style="font-size: 18px; color: #eee; margin-top: 20px;">Use your hand to cut the buttons below!</p>
+        </div>
+        <!-- Final Results Screen (Two-Player) -->
+        <div id="finalResultsScreen" class="final-results-screen hidden">
+            <div class="results-content">
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th data-i18n="player1">玩家1</th>
+                            <th data-i18n="player2">玩家2</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsTableBody">
+                        <!-- Rows will be populated by JS -->
+                    </tbody>
+                </table>
+                <div class="final-winner" id="finalWinnerDisplay"></div>
+            </div>
         </div>
     </div>
 
